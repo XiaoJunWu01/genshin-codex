@@ -7,6 +7,7 @@ import { getWikiConfig, resolvePluginPath } from '../config/config.js'
 import {
   WIKI_CHANNELS,
   WIKI_FOCUS,
+  WIKI_FOCUS_PATTERN,
   WIKI_PAGE_SIZE,
   clipText,
   findWikiFocus,
@@ -93,6 +94,16 @@ function materialHtml(item) {
   return `<span class="mat">${icon}<em>${escapeHtml(item.name)}</em>${amount}</span>`
 }
 
+function imagesHtml(images, motion = false) {
+  const items = images || []
+  if (!items.length) return ''
+  const shots = items.map(item => {
+    const label = item.name ? `<b>${escapeHtml(item.name)}</b>` : ''
+    return `<div class="shot"><img src="${escapeHtml(item.src)}" alt="">${label}</div>`
+  }).join('')
+  return `<div class="${motion ? 'motions' : 'gallery'}">${shots}</div>`
+}
+
 function groupsHtml(groups, total = []) {
   const rows = (groups || []).map(group => {
     const items = (group.materials || []).map(materialHtml).join('')
@@ -146,6 +157,12 @@ section p{color:#334155;font-size:14px;line-height:1.65;word-break:break-word}
 .more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px}
 .more em{color:#64748b;font-style:normal;font-size:12px}
 .more span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:12px;font-weight:700}
+.gallery{display:flex;flex-direction:column;gap:12px;margin-top:8px}
+.shot{padding:8px;border-radius:14px;background:rgba(255,255,255,.9)}
+.shot img{display:block;width:100%;max-height:920px;object-fit:contain;border-radius:10px;background:#fff}
+.shot b{display:block;margin-top:6px;color:var(--ink);font-size:13px;text-align:center}
+.motions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.motions .shot img{max-height:280px;background:var(--soft)}
 `
 
 export default class WikiPlugin extends plugin {
@@ -156,10 +173,10 @@ export default class WikiPlugin extends plugin {
       event: 'message',
       priority: 500,
       rule: [
-        { reg: '^#?(图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
+        { reg: '^#?(?:g)?(?:图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
         { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
-        { reg: '^#g(天赋|技能|命座|命之座|星座|突破|突破材料|材料|故事|背景|简介|介绍|资料|属性|档案|信息)\\s*(\\S+)$', fnc: 'queryFocus' },
+        { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
         { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
       ],
     })
@@ -212,6 +229,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       <div><b>#g突破 胡桃</b><span>各阶段突破材料和满级合计</span></div>
       <div><b>#g故事 胡桃</b><span>角色介绍、故事和配音</span></div>
       <div><b>#g资料 胡桃</b><span>生日、定位、所属、称号</span></div>
+      <div><b>#g立绘 胡桃</b><span>全身立绘</span></div>
+      <div><b>#g展示 胡桃</b><span>待机和技能动作</span></div>
       <div class="help-title">其他图鉴</div>
       <div><b>#武器 狼的末路</b><span>武器属性和突破材料</span></div>
       <div><b>#圣遗物 绝缘之旗印</b><span>套装效果、单件和推荐角色</span></div>
@@ -227,7 +246,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: '观测枢图鉴',
       subtitle: '数据来自米游社观测枢公开词条',
       body,
-      footer: '角色细分都加 g：天赋、命座、突破、故事、资料。裸写 #胡桃 不会触发。',
+      footer: '角色细分都加 g：天赋、命座、突破、故事、资料、立绘、展示。支持雷神、万叶这类别名。裸写 #胡桃 不会触发。',
       extraCss: '.help-list{display:flex;flex-direction:column;gap:8px}.help-title{margin-top:4px;color:#64748b;font-size:12px;font-weight:800}.help-list div{display:flex;justify-content:space-between;gap:16px;padding:10px 12px;background:#f8fafc;border-radius:12px}.help-title{display:block;padding:2px 2px 0;background:transparent}.help-list b{color:#1d4ed8;white-space:nowrap}.help-list span{color:#475569;text-align:right}',
     }), '发送 #图鉴 名称 查询，例如 #图鉴 银釭')
     return true
@@ -296,7 +315,10 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ? (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
       : ''
     const source = focus ? (entry.parts?.[focus.id] || []) : (entry.sections || [])
-    const sections = source.map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}</section>`).join('')
+    const sections = source.map(section => {
+      const pictures = imagesHtml(section.images, section.focus === 'showcase')
+      return `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}${pictures}</section>`
+    }).join('')
     const title = focus ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus ? '' : this.focusLinks(entry)
     return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}${links}`
@@ -353,7 +375,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryFocus(e) {
-    const matched = String(e.msg || '').match(/^#g(天赋|技能|命座|命之座|星座|突破|突破材料|材料|故事|背景|简介|介绍|资料|属性|档案|信息)\s*(\S+)$/)
+    const matched = String(e.msg || '').match(new RegExp(`^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`))
     const focus = findWikiFocus(matched?.[1])
     const keyword = matched?.[2] || ''
     if (!focus || !keyword) return false

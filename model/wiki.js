@@ -77,6 +77,97 @@ function normalizeName(value) {
   return stripHtml(value).replace(/[【】\[\]()（）·\s]/g, '').toLowerCase()
 }
 
+// 观测枢词条的 alias_name 是空的，角色俗称只能在本地维护。
+const CHARACTER_ALIASES = {
+  薇斯纳: ['维纳斯', '维纳', '维斯纳', '维斯娜'],
+  沃雅妮莎: ['沃雅'],
+  伊涅芙: ['伊涅'],
+  菲林斯: ['菲林'],
+  阿蕾奇诺: ['仆人', '阿蕾', '父亲'],
+  哥伦比娅: ['哥伦'],
+  雷电将军: ['雷神', '雷军', '雷电影', '影', '巴尔', '巴尔泽布'],
+  茜特菈莉: ['茜特'],
+  八重神子: ['神子', '八重', '宫司'],
+  莱欧斯利: ['莱欧', '公爵'],
+  梦见月瑞希: ['瑞希'],
+  赛诺: ['大风纪官'],
+  玛薇卡: ['火神', '马薇卡'],
+  班尼特: ['班尼', '点赞', '点赞侠'],
+  香菱: ['锅巴'],
+  菲谢尔: ['皇女'],
+  菈乌玛: ['菈乌'],
+  奈芙尔: ['奈芙'],
+  克洛琳德: ['琳德'],
+  娜维娅: ['娜维'],
+  林尼: ['白猫'],
+  琳妮特: ['黑猫'],
+  丝柯克: ['斯科克'],
+  爱可菲: ['可菲'],
+  塔利雅: ['塔利'],
+  优菈: ['优拉'],
+  可莉: ['火花骑士', '嘟嘟可'],
+  迪卢克: ['卢姥爷'],
+  琴: ['团长'],
+  那维莱特: ['那维', '水龙', '最高审判官'],
+  '奇偶·男性': ['空', '男主'],
+  '奇偶·女性': ['荧', '女主'],
+  芙宁娜: ['水神', '芙芙', '芙卡洛斯'],
+  纳西妲: ['草神', '小草神', '草王', '布耶尔', '小吉祥草王'],
+  妮露: ['尼露'],
+  艾尔海森: ['海森', '书记官'],
+  流浪者: ['散兵', '国崩', '斯卡拉'],
+  提纳里: ['小鹿'],
+  迪希雅: ['希雅'],
+  玛拉妮: ['鲨鱼'],
+  申鹤: ['神鹤'],
+  神里绫华: ['绫华', '神里'],
+  神里绫人: ['绫人', '神里'],
+  珐露珊: ['法露珊'],
+  荒泷一斗: ['一斗', '荒泷'],
+  宵宫: ['烟花', '霄宫'],
+  九条裟罗: ['裟罗'],
+  希诺宁: ['希诺'],
+  温迪: ['巴巴托斯', '风神'],
+  闲云: ['留云'],
+  北斗: ['大姐头'],
+  刻晴: ['玉衡', '阿晴'],
+  甘雨: ['椰羊'],
+  魈: ['降魔大圣', '金鹏'],
+  达达利亚: ['公子', '达达鸭'],
+  钟离: ['岩王帝君', '岩神', '摩拉克斯', '帝君'],
+  胡桃: ['胡堂主', '堂主'],
+  枫原万叶: ['万叶'],
+  夜兰: ['夜栏'],
+  珊瑚宫心海: ['心海', '军师'],
+  鹿野院平藏: ['平藏'],
+  久岐忍: ['忍', '阿忍'],
+  凯亚: ['骑兵队长'],
+  安柏: ['侦察骑士'],
+  七七: ['肚饿'],
+  凝光: ['天权'],
+  '旅行者·冰': ['冰主', '冰旅行者'],
+  '旅行者·水': ['水主', '水旅行者'],
+  '旅行者·火': ['火主', '火旅行者'],
+  '旅行者·雷': ['雷主', '雷旅行者'],
+  '旅行者·岩': ['岩主', '岩旅行者'],
+  '旅行者·风': ['风主', '风旅行者'],
+  '旅行者·草': ['草主', '草旅行者'],
+}
+
+const CHARACTER_ALIAS_INDEX = new Map()
+for (const [name, aliases] of Object.entries(CHARACTER_ALIASES)) {
+  for (const alias of aliases) {
+    const key = normalizeName(alias)
+    if (!key) continue
+    if (!CHARACTER_ALIAS_INDEX.has(key)) CHARACTER_ALIAS_INDEX.set(key, [])
+    CHARACTER_ALIAS_INDEX.get(key).push(name)
+  }
+}
+
+function aliasTargets(keyword) {
+  return CHARACTER_ALIAS_INDEX.get(normalizeName(keyword)) || []
+}
+
 async function requestJson(url) {
   const res = await fetchCompat(url, { headers: HEADERS })
   if (!res.ok) throw new Error(`观测枢请求失败: ${res.status}`)
@@ -91,7 +182,14 @@ export const WIKI_FOCUS = [
   { id: 'ascension', name: '突破', aliases: ['突破', '突破材料', '材料'] },
   { id: 'story', name: '故事', aliases: ['故事', '背景', '简介', '介绍'] },
   { id: 'profile', name: '资料', aliases: ['资料', '属性', '档案', '信息'] },
+  { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
+  { id: 'showcase', name: '展示', aliases: ['展示', '角色展示', '动作', '待机'] },
 ]
+
+export const WIKI_FOCUS_PATTERN = WIKI_FOCUS
+  .flatMap(focus => focus.aliases)
+  .sort((a, b) => b.length - a.length)
+  .join('|')
 
 export function findWikiFocus(keyword) {
   const text = String(keyword || '').trim()
@@ -164,7 +262,8 @@ function scoreItem(item, keyword) {
     return 0
   }
 
-  let score = Math.max(rank(name), rank(alias))
+  const mapped = aliasTargets(keyword).some(target => normalizeName(target) === name)
+  let score = Math.max(rank(name), rank(alias), mapped ? 100 : 0)
   if (!score && query.length >= 2 && [...query].every(char => name.includes(char))) score = 50
   if (!score) return 0
   if (CARD_CHANNELS.has(item.channelName) && score >= 95) score -= 5
@@ -182,11 +281,15 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
     if (!prev || scoreItem(item, text) > scoreItem(prev, text)) collected.set(item.id, item)
   }
 
+  const mapped = aliasTargets(text)
+  const characterOnly = channelId === 25
+  const searchText = characterOnly && mapped.length === 1 ? mapped[0] : text
+
   if (channelId) {
     for (const item of await getChannelItems(channelId)) add(item)
   } else {
     try {
-      for (const item of await searchRemote(text)) add(item)
+      for (const item of await searchRemote(searchText)) add(item)
     } catch (err) {
       logger.warn('[观测枢图鉴] 搜索接口失败，改用图鉴目录:', err.message || err)
     }
@@ -297,11 +400,12 @@ function filtersOf(page) {
   })
 }
 
-function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = []) {
+function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = []) {
   const content = (Array.isArray(lines) ? lines : [lines]).map(line => String(line || '').trim()).filter(Boolean)
   const materialGroups = (groups || []).filter(group => group.materials?.length)
   const cardItems = (cards || []).filter(card => card?.name || card?.text)
-  if (!content.length && !materialGroups.length && !cardItems.length) return
+  const pictures = (images || []).filter(item => item?.src)
+  if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length) return
   const limit = collapse ? 1800 : 4000
   sections.push({
     title: title || '详情',
@@ -309,6 +413,7 @@ function pushSection(sections, title, lines, collapse = false, groups = [], tota
     groups: materialGroups,
     total: total || [],
     cards: cardItems,
+    images: pictures,
   })
 }
 
@@ -535,6 +640,12 @@ function parseComponent(component, moduleName) {
     const parsed = parseTables(data)
     return { title, lines: parsed.lines, cards: parsed.cards }
   }
+  if (id === 'map_desc') {
+    const images = (data.list || [])
+      .filter(item => item?.image && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(item.image))
+      .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image }))
+    return images.length ? { title, lines: [], images } : null
+  }
   if (id === 'artifact_list_v2') {
     const card = parseArtifact(data, moduleName)
     return card ? { title: '圣遗物件', lines: [], cards: [card] } : null
@@ -545,7 +656,7 @@ function parseComponent(component, moduleName) {
   if (id === 'collapse_panel' || id === 'rich_text') {
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
   }
-  if (['map_desc', 'role_voice', 'strategy', 'business_card', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
+  if (['role_voice', 'strategy', 'business_card', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
     return null
   }
   if (data?.rich_text) return { title, lines: [stripHtml(data.rich_text)], collapse: true }
@@ -653,12 +764,16 @@ const STORY_TITLE = /故事|神之眼|更多描述|角色详细|角色CV|配音/
 const PROFILE_TITLE = /基础资料|基础信息|基础属性|物品描述|装备描述/
 const ASCENSION_TITLE = /突破|成长数值|升级材料/
 
-function focusOf(title = '') {
+function focusOf(title = '', images = []) {
   if (/天赋/.test(title)) return 'talent'
   if (/命之座|命座/.test(title)) return 'constellation'
   if (ASCENSION_TITLE.test(title)) return 'ascension'
   if (STORY_TITLE.test(title)) return 'story'
   if (PROFILE_TITLE.test(title)) return 'profile'
+  if (/展示/.test(title) && images.length) {
+    const still = images.every(item => /\.(png|jpe?g|webp)(\?|$)/i.test(item.src) && !/待机|攻击|战技|爆发|重击/.test(item.name))
+    return still ? 'portrait' : 'showcase'
+  }
   return ''
 }
 
@@ -673,8 +788,8 @@ export function formatWikiEntry(page) {
     if (module.is_hidden) continue
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
-      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length) continue
-      pending.push({ ...parsed, focus: focusOf(parsed.title) })
+      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length && !parsed?.images?.length) continue
+      pending.push({ ...parsed, focus: focusOf(parsed.title, parsed.images || []) })
     }
   }
 
@@ -689,17 +804,18 @@ export function formatWikiEntry(page) {
   ]
 
   for (const parsed of ordered) {
-    const previous = sections.find(section => section.title === parsed.title)
+    const previous = sections.find(section => section.title === parsed.title && section.focus === parsed.focus)
     if (previous) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
+      previous.images = [...(previous.images || []), ...(parsed.images || [])]
       if (parsed.lines?.length) previous.text = [previous.text, ...parsed.lines].filter(Boolean).join('\n')
       continue
     }
-    const key = parsed.title + parsed.lines.join('\n')
+    const key = parsed.focus + parsed.title + parsed.lines.join('\n')
     if (seen.has(key)) continue
     seen.add(key)
-    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards)
+    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images)
     const current = sections[sections.length - 1]
     if (current) current.focus = parsed.focus
   }
@@ -723,6 +839,8 @@ export function formatWikiEntry(page) {
       ascension: sections.filter(section => section.focus === 'ascension'),
       story: sections.filter(section => section.focus === 'story'),
       profile: sections.filter(section => section.focus === 'profile'),
+      portrait: sections.filter(section => section.focus === 'portrait'),
+      showcase: sections.filter(section => section.focus === 'showcase'),
     } : {},
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
