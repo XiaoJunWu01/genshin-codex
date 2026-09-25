@@ -45,6 +45,46 @@ function getBackgroundImageUrl() {
   return fs.existsSync(filePath) ? pathToFileURLSafe(filePath) : ''
 }
 
+function cardsHtml(cards) {
+  const items = cards || []
+  if (!items.length) return ''
+  return `<div class="equips">${items.map((card, index) => {
+    const group = card.group && card.group !== items[index - 1]?.group
+      ? `<div class="group">${escapeHtml(card.group)}</div>`
+      : ''
+    const icons = (card.icons?.length ? card.icons : [card.icon]).filter(Boolean)
+    const icon = icons.length
+      ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`
+      : '<span class="placeholder"></span>'
+    const text = card.text ? `<p>${textBlock(card.text)}</p>` : ''
+    return `${group}<div class="equip">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
+  }).join('')}</div>`
+}
+
+const ELEMENT_THEMES = {
+  风: ['#378383', '#e7f6f4', '#123734'],
+  火: ['#B8584B', '#fff1ec', '#4a201b'],
+  水: ['#518ABB', '#eef6ff', '#17324d'],
+  雷: ['#6455A6', '#f4f1ff', '#2c244d'],
+  冰: ['#5FACC1', '#eefbff', '#173d48'],
+  岩: ['#C09257', '#fff7ec', '#463318'],
+  草: ['#6D9840', '#f4faec', '#243814'],
+}
+
+function themeOf(entry) {
+  const theme = entry?.theme || {}
+  const preset = ELEMENT_THEMES[theme.element] || ['#456990', '#f4f7fb', '#1e293b']
+  return {
+    element: theme.element || '',
+    weapon: theme.weapon || '',
+    rarity: theme.rarity || '',
+    portrait: theme.portrait || '',
+    color: theme.color || preset[0],
+    soft: preset[1],
+    ink: preset[2],
+  }
+}
+
 function materialHtml(item) {
   const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : ''
   const amount = item.amount ? `<b>×${escapeHtml(item.amount)}</b>` : ''
@@ -63,30 +103,45 @@ function groupsHtml(groups, total = []) {
   return rows || summary ? `<div class="levels">${rows}${summary}</div>` : ''
 }
 
-const entryCss = [
-  '.entry{display:flex;gap:16px;align-items:flex-start;margin-bottom:14px}',
-  '.cover{width:118px;height:118px;object-fit:contain;border-radius:16px;background:#f8fafc;flex-shrink:0}',
-  '.entry-main{flex:1;min-width:0}.entry-main h2{font-size:28px;color:#0f172a}',
-  '.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}',
-  '.tags span{padding:3px 8px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-size:12px;font-weight:700}',
-  '.attrs{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:12px}',
-  '.attrs div{padding:7px 9px;background:#f8fafc;border-radius:10px}',
-  '.attrs em{display:block;color:#94a3b8;font-style:normal;font-size:12px}',
-  '.attrs b{color:#334155;font-size:14px}',
-  'section{margin-top:12px;padding:12px 14px;background:#f8fafc;border-radius:14px}',
-  'section h3{margin-bottom:6px;color:#1e293b;font-size:16px}',
-  'section p{color:#475569;font-size:14px;line-height:1.65;word-break:break-word}',
-  '.levels{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
-  '.level{padding:8px;border-radius:12px;background:#fff}',
-  '.level>b{display:block;margin-bottom:6px;color:#0f172a;font-size:13px}',
-  '.level>div{display:flex;flex-wrap:wrap;gap:6px}',
-  '.mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 7px 3px 3px;border-radius:999px;background:#f1f5f9}',
-  '.mat img{width:24px;height:24px;object-fit:contain;border-radius:50%;background:#fff}',
-  '.mat em{color:#334155;font-style:normal;font-size:12px}',
-  '.mat b{color:#0369a1;font-size:12px}',
-  '.level small{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.5}',
-  '.total{background:#eff6ff}',
-].join('')
+const entryCss = `
+.hero{position:relative;display:flex;gap:16px;align-items:center;min-height:168px;margin:-24px -24px 16px;padding:24px;border-radius:18px 18px 0 0;background:
+linear-gradient(135deg,var(--soft),#fff 58%),
+radial-gradient(circle at 92% 18%,var(--accent),transparent 34%)}
+.cover{width:112px;height:112px;object-fit:contain;border-radius:24px;background:
+radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);
+border:4px solid #fff;box-shadow:0 8px 18px rgba(0,0,0,.12);flex-shrink:0}
+.hero h2{color:var(--ink);font-size:34px;line-height:1.05}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.facts span{min-width:78px;padding:7px 10px;border-radius:12px;background:#fff;border-top:4px solid var(--accent);box-shadow:0 2px 8px rgba(15,23,42,.06)}
+.facts em{display:block;color:#64748b;font-style:normal;font-size:11px;font-weight:700}
+.facts b{color:var(--ink);font-size:16px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.tags span{padding:3px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:700}
+.attrs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.attrs div{padding:8px 10px;background:var(--soft);border-radius:12px;border-left:4px solid var(--accent)}
+.attrs em{display:block;color:#64748b;font-style:normal;font-size:12px}
+.attrs b{color:var(--ink);font-size:14px}
+section{margin-top:12px;padding:12px 14px;background:var(--soft);border-radius:14px}
+section h3{margin-bottom:6px;padding-left:9px;border-left:4px solid var(--accent);color:var(--ink);font-size:16px}
+section p{color:#334155;font-size:14px;line-height:1.65;word-break:break-word}
+.levels{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.level{padding:8px;border-radius:12px;background:rgba(255,255,255,.88)}
+.level>b{display:block;margin-bottom:6px;color:var(--ink);font-size:13px}
+.level>div{display:flex;flex-wrap:wrap;gap:6px}
+.mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 7px 3px 3px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.mat img{width:26px;height:26px;object-fit:contain;border-radius:50%;background:var(--soft)}
+.mat em{color:#334155;font-style:normal;font-size:12px}
+.mat b{color:var(--accent);font-size:12px}
+.level small{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.5}
+.total{background:#fff}
+.equips{display:flex;flex-direction:column;gap:8px;margin-top:8px}
+.group{margin-top:4px;color:var(--accent);font-size:13px;font-weight:800}
+.equip{display:flex;align-items:flex-start;gap:10px;padding:8px;border-radius:12px;background:rgba(255,255,255,.9)}
+.equip .icons{display:flex;gap:4px;flex-shrink:0}
+.equip .icons img,.equip>img,.equip>.placeholder{width:54px;height:54px;object-fit:contain;border-radius:12px;background:var(--soft)}
+.equip b{display:block;color:var(--ink);font-size:14px;line-height:1.4}
+.equip p{margin-top:3px;color:#475569;font-size:12px;line-height:1.7}
+`
 
 export default class WikiPlugin extends plugin {
   constructor() {
@@ -123,22 +178,17 @@ export default class WikiPlugin extends plugin {
     }
   }
 
-  wrapHtml({ title, subtitle, body, footer, extraCss }) {
-    const bgUrl = getBackgroundImageUrl()
-    const config = getWikiConfig()
-    const opacity = bgUrl ? config.containerOpacity : 1
-    const blur = bgUrl && config.blur > 0 ? `backdrop-filter:blur(${config.blur}px);` : ''
-    const pageBg = bgUrl
-      ? `background:url("${bgUrl}") center/cover no-repeat;`
-      : 'background:linear-gradient(145deg,#f0f4f8 0%,#d9e2ec 100%);'
+  wrapHtml({ title, subtitle, body, footer, extraCss, theme }) {
+    const palette = theme || themeOf({})
+    const pageBg = `background:linear-gradient(145deg,${palette.soft} 0%,${palette.color} 140%);`
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}html,body{overflow:hidden}
 body{display:inline-block;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;background:transparent}
 .page{display:inline-block;${pageBg}padding:20px}
-.container{width:760px;background:rgba(255,255,255,${opacity});${blur}border-radius:18px;box-shadow:0 4px 20px rgba(0,0,0,.16);padding:24px}
-.header{text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid rgba(226,232,240,.75)}
+.container{--accent:${palette.color};--soft:${palette.soft};--ink:${palette.ink};width:760px;background:rgba(255,255,255,.94);border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:24px}
+.header{display:${theme ? 'none' : 'block'};text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid rgba(226,232,240,.75)}
 .header h1{font-size:24px;color:#1e293b}.subtitle{margin-top:4px;color:#64748b;font-size:13px}
-.footer{margin-top:14px;padding-top:10px;border-top:1px solid rgba(226,232,240,.75);text-align:center;color:#94a3b8;font-size:13px;line-height:1.7}
+.footer{margin-top:14px;padding-top:10px;border-top:1px solid rgba(226,232,240,.75);text-align:center;color:#64748b;font-size:13px;line-height:1.7}
 ${extraCss || ''}
 </style></head><body><div class="page"><div class="container">
 <div class="header"><h1>${title}</h1><div class="subtitle">${subtitle || ''}</div></div>
@@ -216,11 +266,18 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   entryHtml(entry) {
+    const theme = themeOf(entry)
     const icon = entry.icon ? `<img class="cover" src="${escapeHtml(entry.icon)}" alt="">` : ''
-    const tags = (entry.tags || []).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
+    const facts = [
+      theme.element && ['元素', theme.element],
+      theme.weapon && ['武器', theme.weapon],
+      theme.rarity && ['稀有度', theme.rarity],
+    ].filter(Boolean).map(([key, value]) => `<span><em>${escapeHtml(key)}</em><b>${escapeHtml(value)}</b></span>`).join('')
+    const tags = (entry.tags || []).filter(tag => ![theme.element, theme.weapon, theme.rarity].includes(tag))
+      .map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
     const attrs = (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
-    const sections = (entry.sections || []).map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups, section.total)}</section>`).join('')
-    return `<div class="entry">${icon}<div class="entry-main"><h2>${escapeHtml(entry.name)}</h2><div class="tags">${tags}</div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}</div></div>${sections}`
+    const sections = (entry.sections || []).map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}</section>`).join('')
+    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(entry.name)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}`
   }
 
   resultListHtml(results, page, keyword) {
@@ -252,6 +309,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       body: this.entryHtml(entry),
       footer: extraFooter || '数据来源：米游社观测枢',
       extraCss: entryCss,
+      theme: themeOf(entry),
     }))
   }
 

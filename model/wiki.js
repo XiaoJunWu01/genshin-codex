@@ -42,6 +42,7 @@ export function stripHtml(value) {
     .replace(/<span[^>]*class="name"[^>]*>([\s\S]*?)<\/span>/gi, '$1')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
+    .replace(/<li[^>]*>/gi, '\n· ')
     .replace(/<\/(div|li|h\d|tr)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
@@ -231,13 +232,39 @@ export function parseWikiQuery(input = '') {
   return { page, channel, keyword: words.join(' ') }
 }
 
-function materialsFromHtml(value) {
+function attrValue(html, name) {
+  return html.match(new RegExp(`data-${name}="([^"]*)"`))?.[1] || ''
+}
+
+function entriesFromHtml(value) {
   const html = String(value ?? '')
-  const tagged = [...html.matchAll(/data-entry-name="([^"]+)"[^>]*data-entry-amount="([^"]*)"/g)]
-    .map(match => `${match[1]}${match[2] ? '×' + match[2] : ''}`)
-  if (tagged.length) return tagged
-  return [...html.matchAll(/<span class="name">([^<]+)<\/span>[\s\S]*?<span class="amount">\*?(\d+)<\/span>/g)]
-    .map(match => `${match[1]}×${match[2]}`)
+  const entries = []
+  const seen = new Set()
+  let guard = 0
+  for (const match of html.matchAll(/data-entry-name="([^"]+)"/g)) {
+    guard += 1
+    if (guard > 30) break
+    const name = stripHtml(match[1])
+    if (!name || seen.has(`${name}:${match.index}`)) continue
+    seen.add(`${name}:${match.index}`)
+    const start = html.lastIndexOf('<', match.index)
+    const end = html.indexOf('data-entry-name=', match.index + 1)
+    const block = html.slice(start < 0 ? match.index : start, end < 0 ? html.length : end)
+    entries.push({
+      name,
+      icon: attrValue(block, 'entry-img'),
+      amount: attrValue(block, 'entry-amount'),
+    })
+  }
+  if (entries.length) return entries
+
+  return [...html.matchAll(/<img[^>]+src="([^"]+)"[\s\S]*?<span class="name">([^<]+)<\/span>(?:[\s\S]*?<span class="amount">\*?(\d+)<\/span>)?/g)]
+    .map(match => ({ name: stripHtml(match[2]), icon: match[1] || '', amount: match[3] || '' }))
+    .filter(item => item.name)
+}
+
+function materialsFromHtml(value) {
+  return entriesFromHtml(value).map(item => `${item.name}${item.amount ? '×' + item.amount : ''}`)
 }
 
 function valuesOf(attr) {
@@ -249,20 +276,24 @@ function valuesOf(attr) {
 
 function filtersOf(page) {
   const ext = parseJson(page?.ext?.fe_ext, {})
-  const raw = ext?.c_5?.filter?.text || ext?.c_5?.filter?.value || []
-  const list = typeof raw === 'string' ? parseJson(raw, []) : raw
-  return Array.isArray(list) ? list.filter(Boolean) : []
+  const lists = Object.values(ext).map(item => item?.filter?.text || item?.filter?.value || [])
+  return lists.flatMap(raw => {
+    const list = typeof raw === 'string' ? parseJson(raw, []) : raw
+    return Array.isArray(list) ? list.filter(Boolean) : []
+  })
 }
 
-function pushSection(sections, title, lines, collapse = false, groups = [], total = []) {
+function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = []) {
   const content = (Array.isArray(lines) ? lines : [lines]).map(line => String(line || '').trim()).filter(Boolean)
   const materialGroups = (groups || []).filter(group => group.materials?.length)
-  if (!content.length && !materialGroups.length) return
+  const cardItems = (cards || []).filter(card => card?.name || card?.text)
+  if (!content.length && !materialGroups.length && !cardItems.length) return
   sections.push({
     title: title || '详情',
     text: clipText(content.join('\n'), collapse ? 520 : 900),
     groups: materialGroups,
     total: total || [],
+    cards: cardItems,
   })
 }
 
@@ -316,17 +347,20 @@ function parseTalent(data) {
   for (const item of data?.list || []) {
     const title = [item.tab_name, item.title].filter(Boolean).join(' · ')
     const desc = clipText(stripHtml(item.desc), 90)
-    if (title || desc) talents.push([title, desc].filter(Boolean).join('：'))
+    if (title || desc) {
+      talents.push({
+        name: title,
+        text: desc,
+        icon: item.icon || '',
+      })
+    }
 
     const table = item.attr || {}
-    const row = (table.row || []).find(cells => /升级材料/.test(cellText(cells?.[0])))
+    const row = (table.row || []).find(cells => /升级材料/.test(cellText(cells?.[0])) && cells.slice(1).some(cell => entriesFromHtml(cell).length))
     if (!row || materials.length) continue
     const header = table.header || []
     materials = row.slice(1).map((cell, index) => {
-      const items = materialsFromHtml(cell).map(label => {
-        const matched = label.match(/^(.*?)(?:×(\d+))?$/)
-        return { name: matched?.[1] || label, amount: matched?.[2] || '', icon: '' }
-      })
+      const items = entriesFromHtml(cell)
       return items.length ? { name: header[index + 1] || `LV${index + 1}`, materials: items } : null
     }).filter(Boolean)
   }
@@ -339,27 +373,112 @@ function cellText(cell) {
   return stripHtml(cell.value || cell.text || cell.name || cell.title || '')
 }
 
+function imagesFromHtml(value) {
+  const html = String(value ?? '')
+  const tagged = [...html.matchAll(/data-image-url="([^"]+)"/g)].map(match => match[1])
+  const images = tagged.length ? tagged : [...html.matchAll(/<img[^>]+src="([^"]+)"/g)].map(match => match[1])
+  return [...new Set(images.filter(Boolean))]
+}
+
+function splitConstellations(html) {
+  const text = String(html ?? '')
+  if (text.includes('data-entry-name')) return []
+  const marks = [...text.matchAll(/<img[^>]+>/g)]
+  if (marks.length < 2) return []
+  return marks.map((mark, index) => {
+    const start = mark.index
+    const end = marks[index + 1]?.index ?? text.length
+    const block = text.slice(start, end)
+    const plain = stripHtml(block)
+    const title = plain.split('\n').find(Boolean) || ''
+    return {
+      name: title,
+      icon: imagesFromHtml(block)[0] || '',
+      text: plain.slice(title.length).trim(),
+    }
+  }).filter(item => item.name)
+}
+
 function parseTables(data) {
   const lines = []
+  const cards = []
   for (const table of (data?.tables || []).slice(0, 2)) {
     const title = stripHtml(table?.tab_name || table?.title || table?.name || '')
-    if (title && title !== '默认标题') lines.push(title)
     const rows = table?.row || table?.rows || table?.list || table?.data || []
-    for (const row of rows.slice(0, 6)) {
-      const cells = Array.isArray(row) ? row : (row?.cells || row?.value || row?.attr || row?.columns)
-      const text = Array.isArray(cells)
-        ? cells.map(cellText).filter(Boolean).join('：')
-        : cellText(row)
-      if (text) lines.push(text)
+    const visual = rows.some(row => {
+      const cells = Array.isArray(row) ? row : []
+      return entriesFromHtml(cells[0]).length || imagesFromHtml(cells[0]).length
+    })
+    if (!visual) {
+      if (title && title !== '默认标题') lines.push(title)
+      for (const row of rows.slice(0, 6)) {
+        const cells = Array.isArray(row) ? row : (row?.cells || row?.value || row?.attr || row?.columns)
+        const text = Array.isArray(cells)
+          ? cells.map(cellText).filter(Boolean).join('：')
+          : cellText(row)
+        if (text) lines.push(text)
+      }
+      continue
+    }
+
+    const limit = /推荐/.test(title) ? 6 : 8
+    let shown = 0
+    for (const row of rows) {
+      if (shown >= limit) break
+      const cells = Array.isArray(row) ? row : []
+      const label = cellText(cells[0])
+      if (/成长数据/.test(label)) continue
+      shown += 1
+      const reason = cells.slice(1).map(cellText).filter(Boolean).join('\n')
+      const constellations = splitConstellations(cells[0])
+      if (constellations.length > 1) {
+        constellations.forEach(item => cards.push({ group: title, ...item }))
+        continue
+      }
+      const entries = entriesFromHtml(cells[0])
+      const images = imagesFromHtml(cells[0])
+      if (entries.length > 1) {
+        const separator = stripHtml(cells[0]).includes('/') ? ' / ' : ' + '
+        cards.push({
+          group: title,
+          name: entries.map(entry => entry.name).join(separator),
+          icons: entries.map(entry => entry.icon).filter(Boolean),
+          text: reason,
+        })
+      } else if (entries.length) {
+        cards.push({
+          group: title,
+          name: entries[0].name,
+          icon: entries[0].icon,
+          text: reason,
+        })
+      } else if (images.length === 1 && !/成长数据/.test(label)) {
+        const text = cellText(cells[0])
+        cards.push({
+          group: title,
+          name: text,
+          icon: images[0],
+          text: reason,
+        })
+      } else {
+        const text = cells.map(cellText).filter(Boolean).join('：')
+        if (text && !/成长数据/.test(text)) cards.push({ group: title, name: text })
+      }
     }
   }
-  return lines
+  return { lines, cards }
 }
 
 function parseArtifact(data, moduleName) {
   const name = valuesOf(data?.name).join('') || stripHtml(data?.title)
+  const slot = stripHtml(moduleName || data?.title).replace(/[：:]+$/g, '')
   const desc = valuesOf(data?.desc).join('')
-  return [name && `${moduleName || '部件'}：${name}`, desc].filter(Boolean)
+  if (!name && !desc) return null
+  return {
+    name: slot && name ? `${slot} · ${name}` : (name || slot),
+    icon: data?.icon_url || '',
+    text: desc,
+  }
 }
 
 function parseComponent(component, moduleName) {
@@ -368,17 +487,14 @@ function parseComponent(component, moduleName) {
   const title = moduleName || '详情'
 
   if (id === 'material_base_info') {
-    const recipe = materialsFromHtml(data?.materials?.value || '').map(label => {
-      const matched = label.match(/^(.*?)(?:×(\d+))?$/)
-      return { name: matched?.[1] || label, amount: matched?.[2] || '', icon: '' }
-    })
+    const recipe = entriesFromHtml(data?.materials?.value || '')
     return {
       title: data.name || title,
       lines: attrPairs(data.attr, 6).map(attr => `${attr.key}：${attr.value}`),
       groups: recipe.length ? [{ name: '加工材料', materials: recipe }] : [],
     }
   }
-  if (/base_info/.test(id)) return null
+  if (/base_info/.test(id) && id !== 'rich_base_info') return null
   if (id === 'good_desc') {
     const attrs = attrPairs(data?.attr, 6).map(attr => `${attr.key}：${attr.value}`)
     return { title, lines: [stripHtml(data?.rich_text), ...attrs].filter(Boolean) }
@@ -394,10 +510,16 @@ function parseComponent(component, moduleName) {
   }
   if (id === 'role_talent') {
     const parsed = parseTalent(data)
-    return { title, lines: parsed.talents, groups: parsed.materials }
+    return { title, lines: [], cards: parsed.talents, groups: parsed.materials }
   }
-  if (id === 'multi_table' || id === 'recommend') return { title, lines: parseTables(data) }
-  if (id === 'artifact_list_v2') return { title: '圣遗物件', lines: parseArtifact(data, moduleName) }
+  if (id === 'multi_table' || id === 'recommend') {
+    const parsed = parseTables(data)
+    return { title, lines: parsed.lines, cards: parsed.cards }
+  }
+  if (id === 'artifact_list_v2') {
+    const card = parseArtifact(data, moduleName)
+    return card ? { title: '圣遗物件', lines: [], cards: [card] } : null
+  }
   if (id === 'rich_base_info') {
     return { title, lines: attrPairs(data?.list || data?.attr, 8).map(attr => `${attr.key}：${attr.value}`) }
   }
@@ -409,6 +531,52 @@ function parseComponent(component, moduleName) {
   }
   if (data?.rich_text) return { title, lines: [stripHtml(data.rich_text)], collapse: true }
   return null
+}
+
+function coverIcon(data, page) {
+  const square = page?.icon_url || ''
+  const portrait = data?.image || ''
+  const banner = data?.avatar_pc || data?.avatar_m || ''
+  if (portrait && !banner) return portrait
+  return square || portrait || banner
+}
+
+const ELEMENT_COLORS = {
+  风: '#378383',
+  火: '#B8584B',
+  水: '#518ABB',
+  雷: '#6455A6',
+  冰: '#5FACC1',
+  岩: '#C09257',
+  草: '#6D9840',
+}
+
+function themeFrom(page, base, filters) {
+  const values = filters.map(item => String(item).split('/'))
+  const element = values.find(item => item[0] === '元素')?.[1]
+    || String(base.element || '')
+  const weapon = values.find(item => item[0] === '武器' || item[0] === '武器类型')?.[1]
+    || String(base.weapon_type || base.category || '')
+  const rarity = values.find(item => /星/.test(item[0]))?.[1]
+  const portraits = []
+  for (const module of page?.modules || []) {
+    if (module.is_hidden || !/展示/.test(module.name || '')) continue
+    for (const component of module.components || []) {
+      const data = parseJson(component.data, {})
+      for (const item of data.list || []) {
+        if (item?.image && /\.(png|jpe?g)(\?|$)/i.test(item.image)) portraits.push(item.image)
+      }
+    }
+  }
+  const color = /^#[0-9a-f]{6}$/i.test(base.role_attribute || '') ? base.role_attribute.toUpperCase() : ''
+  const elementByColor = Object.entries(ELEMENT_COLORS).find(([, value]) => value.toUpperCase() === color)?.[0] || ''
+  return {
+    element: element || elementByColor,
+    weapon,
+    color,
+    rarity: base.star ? `${base.star}星` : (rarity && !/星/.test(rarity) ? `${rarity}星` : rarity || ''),
+    portrait: '',
+  }
 }
 
 function headerFrom(page) {
@@ -450,13 +618,15 @@ function headerFrom(page) {
   }
 
   return {
-    icon: data.image || data.avatar_pc || data.avatar_m || page.icon_url || '',
+    icon: coverIcon(data, page),
     tags: tags.slice(0, 8),
     attrs: attrs.slice(0, 8),
+    theme: themeFrom(page, data, filters),
   }
 }
 
 const PRIORITY = ['装备描述', '基础信息', '物品描述', '基础属性', '圣遗物件', '成长数值', '角色突破', '推荐装备', '天赋', '命之座', '推荐角色', '特殊料理']
+const LOW_PRIORITY = /CV|配音|故事|关系|媒体|时间轴|生日|宣发|更多描述|角色详细/
 
 export function formatWikiEntry(page) {
   if (!page?.id) return null
@@ -469,7 +639,7 @@ export function formatWikiEntry(page) {
     if (module.is_hidden) continue
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
-      if (!parsed?.lines?.length && !parsed?.groups?.length) continue
+      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length) continue
       pending.push(parsed)
     }
   }
@@ -479,15 +649,23 @@ export function formatWikiEntry(page) {
     const bi = PRIORITY.indexOf(b.title)
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
   })
+  const ordered = [
+    ...pending.filter(item => !LOW_PRIORITY.test(item.title)),
+    ...pending.filter(item => LOW_PRIORITY.test(item.title)),
+  ]
 
-  for (const parsed of pending) {
+  for (const parsed of ordered) {
+    const previous = sections.find(section => section.title === parsed.title)
+    if (previous) {
+      previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
+      previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
+      continue
+    }
     const key = parsed.title + parsed.lines.join('\n')
-    if (seen.has(parsed.title) || seen.has(key)) continue
-    seen.add(parsed.title)
+    if (seen.has(key)) continue
     seen.add(key)
-    const lines = parsed.title === '圣遗物件' ? parsed.lines.slice(0, 2) : parsed.lines
-    pushSection(sections, parsed.title, lines, parsed.collapse, parsed.groups, parsed.total)
-    if (sections.length >= 5) break
+    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards)
+    if (sections.length >= 5 && !/圣遗物/.test(parsed.title)) break
   }
 
   return {
@@ -496,6 +674,7 @@ export function formatWikiEntry(page) {
     icon: header.icon,
     tags: header.tags,
     attrs: header.attrs,
+    theme: header.theme,
     sections,
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
