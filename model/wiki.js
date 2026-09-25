@@ -85,6 +85,20 @@ async function requestJson(url) {
   return json.data
 }
 
+export const WIKI_FOCUS = [
+  { id: 'talent', name: '天赋', aliases: ['天赋', '技能'] },
+  { id: 'constellation', name: '命座', aliases: ['命座', '命之座', '星座'] },
+  { id: 'ascension', name: '突破', aliases: ['突破', '突破材料', '材料'] },
+  { id: 'story', name: '故事', aliases: ['故事', '背景', '简介', '介绍'] },
+  { id: 'profile', name: '资料', aliases: ['资料', '属性', '档案', '信息'] },
+]
+
+export function findWikiFocus(keyword) {
+  const text = String(keyword || '').trim()
+  if (!text) return null
+  return WIKI_FOCUS.find(focus => focus.id === text || focus.aliases.includes(text)) || null
+}
+
 export function findWikiChannel(keyword) {
   const text = String(keyword || '').trim()
   if (!text) return null
@@ -288,9 +302,10 @@ function pushSection(sections, title, lines, collapse = false, groups = [], tota
   const materialGroups = (groups || []).filter(group => group.materials?.length)
   const cardItems = (cards || []).filter(card => card?.name || card?.text)
   if (!content.length && !materialGroups.length && !cardItems.length) return
+  const limit = collapse ? 1800 : 4000
   sections.push({
     title: title || '详情',
-    text: clipText(content.join('\n'), collapse ? 520 : 900),
+    text: content.join('\n').length > limit ? clipText(content.join('\n'), limit) : content.join('\n'),
     groups: materialGroups,
     total: total || [],
     cards: cardItems,
@@ -346,7 +361,7 @@ function parseTalent(data) {
   let materials = []
   for (const item of data?.list || []) {
     const title = [item.tab_name, item.title].filter(Boolean).join(' · ')
-    const desc = clipText(stripHtml(item.desc), 90)
+    const desc = stripHtml(item.desc)
     if (title || desc) {
       talents.push({
         name: title,
@@ -432,7 +447,7 @@ function parseTables(data) {
       const reason = cells.slice(1).map(cellText).filter(Boolean).join('\n')
       const constellations = splitConstellations(cells[0])
       if (constellations.length > 1) {
-        constellations.forEach(item => cards.push({ group: title, ...item }))
+        constellations.forEach(item => cards.push(item))
         continue
       }
       const entries = entriesFromHtml(cells[0])
@@ -494,7 +509,10 @@ function parseComponent(component, moduleName) {
       groups: recipe.length ? [{ name: '加工材料', materials: recipe }] : [],
     }
   }
-  if (/base_info/.test(id) && id !== 'rich_base_info') return null
+  if (/base_info/.test(id) && id !== 'rich_base_info') {
+    const lines = attrPairs(data?.attr, 8).map(attr => `${attr.key}：${attr.value}`)
+    return lines.length ? { title: '基础资料', lines } : null
+  }
   if (id === 'good_desc') {
     const attrs = attrPairs(data?.attr, 6).map(attr => `${attr.key}：${attr.value}`)
     return { title, lines: [stripHtml(data?.rich_text), ...attrs].filter(Boolean) }
@@ -513,6 +531,7 @@ function parseComponent(component, moduleName) {
     return { title, lines: [], cards: parsed.talents, groups: parsed.materials }
   }
   if (id === 'multi_table' || id === 'recommend') {
+    if (/演示/.test(title)) return null
     const parsed = parseTables(data)
     return { title, lines: parsed.lines, cards: parsed.cards }
   }
@@ -579,6 +598,10 @@ function themeFrom(page, base, filters) {
   }
 }
 
+function isCharacterPage(page) {
+  return (page?.modules || []).some(module => (module.components || []).some(component => /role_/.test(component.component_id || '')))
+}
+
 function headerFrom(page) {
   const filters = filtersOf(page)
   let base = null
@@ -626,7 +649,18 @@ function headerFrom(page) {
 }
 
 const PRIORITY = ['装备描述', '基础信息', '物品描述', '基础属性', '圣遗物件', '成长数值', '角色突破', '推荐装备', '天赋', '命之座', '推荐角色', '特殊料理']
-const LOW_PRIORITY = /CV|配音|故事|关系|媒体|时间轴|生日|宣发|更多描述|角色详细/
+const STORY_TITLE = /故事|神之眼|更多描述|角色详细|角色CV|配音/
+const PROFILE_TITLE = /基础资料|基础信息|基础属性|物品描述|装备描述/
+const ASCENSION_TITLE = /突破|成长数值|升级材料/
+
+function focusOf(title = '') {
+  if (/天赋/.test(title)) return 'talent'
+  if (/命之座|命座/.test(title)) return 'constellation'
+  if (ASCENSION_TITLE.test(title)) return 'ascension'
+  if (STORY_TITLE.test(title)) return 'story'
+  if (PROFILE_TITLE.test(title)) return 'profile'
+  return ''
+}
 
 export function formatWikiEntry(page) {
   if (!page?.id) return null
@@ -640,7 +674,7 @@ export function formatWikiEntry(page) {
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
       if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length) continue
-      pending.push(parsed)
+      pending.push({ ...parsed, focus: focusOf(parsed.title) })
     }
   }
 
@@ -650,8 +684,8 @@ export function formatWikiEntry(page) {
     return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
   })
   const ordered = [
-    ...pending.filter(item => !LOW_PRIORITY.test(item.title)),
-    ...pending.filter(item => LOW_PRIORITY.test(item.title)),
+    ...pending.filter(item => item.focus !== 'story'),
+    ...pending.filter(item => item.focus === 'story'),
   ]
 
   for (const parsed of ordered) {
@@ -659,14 +693,21 @@ export function formatWikiEntry(page) {
     if (previous) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
+      if (parsed.lines?.length) previous.text = [previous.text, ...parsed.lines].filter(Boolean).join('\n')
       continue
     }
     const key = parsed.title + parsed.lines.join('\n')
     if (seen.has(key)) continue
     seen.add(key)
     pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards)
-    if (sections.length >= 5 && !/圣遗物/.test(parsed.title)) break
+    const current = sections[sections.length - 1]
+    if (current) current.focus = parsed.focus
   }
+
+  const character = isCharacterPage(page)
+  const overview = character
+    ? sections.filter(section => /推荐装备|特殊料理|圣遗物|基础资料/.test(section.title)).slice(0, 4)
+    : sections.filter(section => !STORY_TITLE.test(section.title)).slice(0, 5)
 
   return {
     id: String(page.id),
@@ -675,7 +716,14 @@ export function formatWikiEntry(page) {
     tags: header.tags,
     attrs: header.attrs,
     theme: header.theme,
-    sections,
+    sections: overview,
+    parts: character ? {
+      talent: sections.filter(section => section.focus === 'talent'),
+      constellation: sections.filter(section => section.focus === 'constellation'),
+      ascension: sections.filter(section => section.focus === 'ascension'),
+      story: sections.filter(section => section.focus === 'story'),
+      profile: sections.filter(section => section.focus === 'profile'),
+    } : {},
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
 }

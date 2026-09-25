@@ -6,8 +6,10 @@ import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
 import {
   WIKI_CHANNELS,
+  WIKI_FOCUS,
   WIKI_PAGE_SIZE,
   clipText,
+  findWikiFocus,
   getWikiEntry,
   listWikiChannel,
   parseWikiQuery,
@@ -141,6 +143,9 @@ section p{color:#334155;font-size:14px;line-height:1.65;word-break:break-word}
 .equip .icons img,.equip>img,.equip>.placeholder{width:54px;height:54px;object-fit:contain;border-radius:12px;background:var(--soft)}
 .equip b{display:block;color:var(--ink);font-size:14px;line-height:1.4}
 .equip p{margin-top:3px;color:#475569;font-size:12px;line-height:1.7}
+.more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px}
+.more em{color:#64748b;font-style:normal;font-size:12px}
+.more span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:12px;font-weight:700}
 `
 
 export default class WikiPlugin extends plugin {
@@ -154,6 +159,7 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?(图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
         { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
+        { reg: '^#g(天赋|技能|命座|命之座|星座|突破|突破材料|材料|故事|背景|简介|介绍|资料|属性|档案|信息)\\s*(\\S+)$', fnc: 'queryFocus' },
         { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
       ],
     })
@@ -199,19 +205,30 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async showHelp(e) {
     const body = `<div class="help-list">
-      <div><b>#武器 狼的末路</b><span>分类直达：角色、武器、圣遗物、敌人/魔物、食物、材料</span></div>
-      <div><b>#角色 胡桃</b><span>角色卡含突破材料和天赋升级材料</span></div>
-      <div><b>#图鉴 银釭</b><span>不写分类时全库搜索，唯一结果直接出图</span></div>
-      <div><b>#图鉴 武器 狼末</b><span>支持简称；多个结果先出列表</span></div>
-      <div><b>#图鉴 胡桃</b><span>多个结果会出列表，再用 #图鉴2 打开</span></div>
-      <div><b>#图鉴目录 武器</b><span>浏览该分类，翻页用 #图鉴目录 武器 2</span></div>
+      <div class="help-title">角色</div>
+      <div><b>#角色 胡桃</b><span>总览：资料、推荐装备、特殊料理</span></div>
+      <div><b>#g天赋 胡桃</b><span>天赋全文和升级材料</span></div>
+      <div><b>#g命座 胡桃</b><span>六条命之座</span></div>
+      <div><b>#g突破 胡桃</b><span>各阶段突破材料和满级合计</span></div>
+      <div><b>#g故事 胡桃</b><span>角色介绍、故事和配音</span></div>
+      <div><b>#g资料 胡桃</b><span>生日、定位、所属、称号</span></div>
+      <div class="help-title">其他图鉴</div>
+      <div><b>#武器 狼的末路</b><span>武器属性和突破材料</span></div>
+      <div><b>#圣遗物 绝缘之旗印</b><span>套装效果、单件和推荐角色</span></div>
+      <div><b>#敌人 丘丘人</b><span>敌人资料。#魔物 相同</span></div>
+      <div><b>#食物 甜甜花酿鸡</b><span>食谱材料和食用效果</span></div>
+      <div><b>#材料 霓裳花</b><span>材料来源和用途</span></div>
+      <div class="help-title">搜索</div>
+      <div><b>#图鉴 银釭</b><span>不限分类搜索，唯一结果直接出图</span></div>
+      <div><b>#图鉴2</b><span>打开刚才搜索结果的第 2 条</span></div>
+      <div><b>#图鉴目录 武器</b><span>浏览分类，翻页加数字</span></div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
       subtitle: '数据来自米游社观测枢公开词条',
       body,
-      footer: '分类：角色 / 武器 / 圣遗物 / 敌人 / 食物 / 材料',
-      extraCss: '.help-list{display:flex;flex-direction:column;gap:10px}.help-list div{display:flex;justify-content:space-between;gap:16px;padding:12px 14px;background:#f8fafc;border-radius:12px}.help-list b{color:#1d4ed8;white-space:nowrap}.help-list span{color:#475569;text-align:right}',
+      footer: '角色细分都加 g：天赋、命座、突破、故事、资料。裸写 #胡桃 不会触发。',
+      extraCss: '.help-list{display:flex;flex-direction:column;gap:8px}.help-title{margin-top:4px;color:#64748b;font-size:12px;font-weight:800}.help-list div{display:flex;justify-content:space-between;gap:16px;padding:10px 12px;background:#f8fafc;border-radius:12px}.help-title{display:block;padding:2px 2px 0;background:transparent}.help-list b{color:#1d4ed8;white-space:nowrap}.help-list span{color:#475569;text-align:right}',
     }), '发送 #图鉴 名称 查询，例如 #图鉴 银釭')
     return true
   }
@@ -265,7 +282,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return e.reply(fallback || '图片渲染失败，请稍后重试')
   }
 
-  entryHtml(entry) {
+  entryHtml(entry, focus = null) {
     const theme = themeOf(entry)
     const icon = entry.icon ? `<img class="cover" src="${escapeHtml(entry.icon)}" alt="">` : ''
     const facts = [
@@ -275,9 +292,23 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     ].filter(Boolean).map(([key, value]) => `<span><em>${escapeHtml(key)}</em><b>${escapeHtml(value)}</b></span>`).join('')
     const tags = (entry.tags || []).filter(tag => ![theme.element, theme.weapon, theme.rarity].includes(tag))
       .map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
-    const attrs = (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
-    const sections = (entry.sections || []).map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}</section>`).join('')
-    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(entry.name)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}`
+    const attrs = !focus || focus.id === 'profile'
+      ? (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
+      : ''
+    const source = focus ? (entry.parts?.[focus.id] || []) : (entry.sections || [])
+    const sections = source.map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}</section>`).join('')
+    const title = focus ? `${entry.name} · ${focus.name}` : entry.name
+    const links = focus ? '' : this.focusLinks(entry)
+    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}${links}`
+  }
+
+  focusLinks(entry) {
+    const parts = entry.parts || {}
+    const links = WIKI_FOCUS
+      .filter(focus => parts[focus.id]?.length)
+      .map(focus => `<span>#g${focus.name} ${escapeHtml(entry.name)}</span>`)
+      .join('')
+    return links ? `<div class="more"><em>分开查看</em>${links}</div>` : ''
   }
 
   resultListHtml(results, page, keyword) {
@@ -301,16 +332,56 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return e.group_id ? `wiki:g:${e.group_id}` : `wiki:u:${e.user_id}`
   }
 
-  async showEntry(e, target, extraFooter = '') {
+  async showEntry(e, target, extraFooter = '', focus = null) {
     const entry = await getWikiEntry(target.id)
+    const part = focus ? entry.parts?.[focus.id] || [] : null
+    if (focus && !part.length) {
+      await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #角色 ${entry.name}`)
+      return
+    }
+    const hint = focus
+      ? `返回总览：#角色 ${entry.name}`
+      : (extraFooter || '数据来源：米游社观测枢')
     await this.replyImage(e, this.wrapHtml({
-      title: entry.name,
+      title: focus ? `${entry.name} · ${focus.name}` : entry.name,
       subtitle: target.channelName || '观测枢词条',
-      body: this.entryHtml(entry),
-      footer: extraFooter || '数据来源：米游社观测枢',
+      body: this.entryHtml(entry, focus),
+      footer: extraFooter && focus ? `${extraFooter}<br>${hint}` : hint,
       extraCss: entryCss,
       theme: themeOf(entry),
     }))
+  }
+
+  async queryFocus(e) {
+    const matched = String(e.msg || '').match(/^#g(天赋|技能|命座|命之座|星座|突破|突破材料|材料|故事|背景|简介|介绍|资料|属性|档案|信息)\s*(\S+)$/)
+    const focus = findWikiFocus(matched?.[1])
+    const keyword = matched?.[2] || ''
+    if (!focus || !keyword) return false
+    try {
+      const results = await searchWiki(keyword, { channelId: 25, limit: 8 })
+      if (!results.length) {
+        await e.reply(`没有找到角色「${keyword}」。可以换成更完整的名字，例如 #g${focus.name} 胡桃`)
+        return true
+      }
+      const exact = results.filter(item => item.score === 100)
+      if (results[0].score === 100 && exact.length === 1) {
+        await this.showEntry(e, results[0], '', focus)
+        return true
+      }
+      sessions.set(this.sessionKey(e), { results, keyword, focus: focus.id, time: Date.now() })
+      const view = this.resultListHtml(results, 1, keyword)
+      await this.replyImage(e, this.wrapHtml({
+        title: `「${keyword}」的角色`,
+        subtitle: `选一个再看${focus.name}`,
+        body: view.body,
+        footer: `发送 #图鉴序号 查看${focus.name}，例如 #图鉴1`,
+        extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+      }))
+    } catch (err) {
+      logger.error('[观测枢图鉴]', err)
+      await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+    }
+    return true
   }
 
   async queryAlias(e) {
@@ -336,7 +407,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           await e.reply('没有这条序号。请先搜索，例如 #图鉴 银釭')
           return true
         }
-        await this.showEntry(e, target)
+        await this.showEntry(e, target, '', findWikiFocus(cached.focus))
         return true
       }
 
