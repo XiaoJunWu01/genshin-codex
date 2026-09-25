@@ -1,0 +1,319 @@
+import plugin from '../../../lib/plugins/plugin.js'
+import puppeteer from '../../../lib/puppeteer/puppeteer.js'
+import { fileURLToPath } from 'url'
+import path from 'path'
+import fs from 'fs'
+import { getWikiConfig, resolvePluginPath } from '../config/config.js'
+import {
+  WIKI_CHANNELS,
+  WIKI_PAGE_SIZE,
+  clipText,
+  getWikiEntry,
+  listWikiChannel,
+  parseWikiQuery,
+  searchWiki,
+} from '../model/wiki.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const pluginRoot = path.join(__dirname, '..')
+const sessions = new Map()
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function textBlock(value) {
+  return escapeHtml(value).replace(/\n/g, '<br>')
+}
+
+function pathToFileURLSafe(filePath) {
+  return 'file:///' + filePath.replace(/\\/g, '/').replace(/^\/+/, '')
+}
+
+function getBackgroundImageUrl() {
+  const configBg = resolvePluginPath(getWikiConfig().backgroundPath)
+  if (configBg) {
+    if (/^https?:\/\//i.test(configBg) || /^file:\/\//i.test(configBg)) return configBg
+    if (fs.existsSync(configBg)) return pathToFileURLSafe(configBg)
+  }
+  const filePath = path.join(pluginRoot, 'resources', 'background', 'bg.png')
+  return fs.existsSync(filePath) ? pathToFileURLSafe(filePath) : ''
+}
+
+function materialHtml(item) {
+  const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : ''
+  const amount = item.amount ? `<b>×${escapeHtml(item.amount)}</b>` : ''
+  return `<span class="mat">${icon}<em>${escapeHtml(item.name)}</em>${amount}</span>`
+}
+
+function groupsHtml(groups, total = []) {
+  const rows = (groups || []).map(group => {
+    const items = (group.materials || []).map(materialHtml).join('')
+    const note = group.note ? `<small>${textBlock(group.note)}</small>` : ''
+    return `<div class="level"><b>${escapeHtml(group.name)}</b><div>${items}</div>${note}</div>`
+  }).join('')
+  const summary = total?.length
+    ? `<div class="level total"><b>满级合计</b><div>${total.map(materialHtml).join('')}</div></div>`
+    : ''
+  return rows || summary ? `<div class="levels">${rows}${summary}</div>` : ''
+}
+
+const entryCss = [
+  '.entry{display:flex;gap:16px;align-items:flex-start;margin-bottom:14px}',
+  '.cover{width:118px;height:118px;object-fit:contain;border-radius:16px;background:#f8fafc;flex-shrink:0}',
+  '.entry-main{flex:1;min-width:0}.entry-main h2{font-size:28px;color:#0f172a}',
+  '.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}',
+  '.tags span{padding:3px 8px;border-radius:999px;background:#e0f2fe;color:#0369a1;font-size:12px;font-weight:700}',
+  '.attrs{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;margin-top:12px}',
+  '.attrs div{padding:7px 9px;background:#f8fafc;border-radius:10px}',
+  '.attrs em{display:block;color:#94a3b8;font-style:normal;font-size:12px}',
+  '.attrs b{color:#334155;font-size:14px}',
+  'section{margin-top:12px;padding:12px 14px;background:#f8fafc;border-radius:14px}',
+  'section h3{margin-bottom:6px;color:#1e293b;font-size:16px}',
+  'section p{color:#475569;font-size:14px;line-height:1.65;word-break:break-word}',
+  '.levels{display:flex;flex-direction:column;gap:8px;margin-top:8px}',
+  '.level{padding:8px;border-radius:12px;background:#fff}',
+  '.level>b{display:block;margin-bottom:6px;color:#0f172a;font-size:13px}',
+  '.level>div{display:flex;flex-wrap:wrap;gap:6px}',
+  '.mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 7px 3px 3px;border-radius:999px;background:#f1f5f9}',
+  '.mat img{width:24px;height:24px;object-fit:contain;border-radius:50%;background:#fff}',
+  '.mat em{color:#334155;font-style:normal;font-size:12px}',
+  '.mat b{color:#0369a1;font-size:12px}',
+  '.level small{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.5}',
+  '.total{background:#eff6ff}',
+].join('')
+
+export default class WikiPlugin extends plugin {
+  constructor() {
+    super({
+      name: '观测枢图鉴',
+      dsc: '原神观测枢角色、武器、圣遗物等图鉴查询',
+      event: 'message',
+      priority: 500,
+      rule: [
+        { reg: '^#?(图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
+        { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
+        { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
+        { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
+      ],
+    })
+  }
+
+  async render(html) {
+    const tmpDir = path.join(pluginRoot, 'temp')
+    if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true })
+    const tplFile = path.join(tmpDir, `wiki_${Date.now()}.html`)
+    fs.writeFileSync(tplFile, html)
+    try {
+      return await puppeteer.screenshot('dps-plugin', {
+        tplFile,
+        imgType: 'png',
+        fullPage: false,
+      })
+    } catch (err) {
+      logger.error('[观测枢图鉴] 截图失败:', err)
+      return null
+    } finally {
+      try { fs.unlinkSync(tplFile) } catch {}
+    }
+  }
+
+  wrapHtml({ title, subtitle, body, footer, extraCss }) {
+    const bgUrl = getBackgroundImageUrl()
+    const config = getWikiConfig()
+    const opacity = bgUrl ? config.containerOpacity : 1
+    const blur = bgUrl && config.blur > 0 ? `backdrop-filter:blur(${config.blur}px);` : ''
+    const pageBg = bgUrl
+      ? `background:url("${bgUrl}") center/cover no-repeat;`
+      : 'background:linear-gradient(145deg,#f0f4f8 0%,#d9e2ec 100%);'
+    return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}html,body{overflow:hidden}
+body{display:inline-block;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;background:transparent}
+.page{display:inline-block;${pageBg}padding:20px}
+.container{width:760px;background:rgba(255,255,255,${opacity});${blur}border-radius:18px;box-shadow:0 4px 20px rgba(0,0,0,.16);padding:24px}
+.header{text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid rgba(226,232,240,.75)}
+.header h1{font-size:24px;color:#1e293b}.subtitle{margin-top:4px;color:#64748b;font-size:13px}
+.footer{margin-top:14px;padding-top:10px;border-top:1px solid rgba(226,232,240,.75);text-align:center;color:#94a3b8;font-size:13px;line-height:1.7}
+${extraCss || ''}
+</style></head><body><div class="page"><div class="container">
+<div class="header"><h1>${title}</h1><div class="subtitle">${subtitle || ''}</div></div>
+${body}<div class="footer">${footer || ''}</div></div></div>
+<script>window.addEventListener('load',()=>{setTimeout(()=>{const page=document.querySelector('.page');if(!page)return;const rect=page.getBoundingClientRect();const w=Math.ceil(rect.width);const h=Math.ceil(rect.height);document.documentElement.style.width=w+'px';document.documentElement.style.height=h+'px';document.body.style.width=w+'px';document.body.style.height=h+'px'},100)})</script>
+</body></html>`
+  }
+
+  async showHelp(e) {
+    const body = `<div class="help-list">
+      <div><b>#武器 狼的末路</b><span>分类直达：角色、武器、圣遗物、敌人/魔物、食物、材料</span></div>
+      <div><b>#角色 胡桃</b><span>角色卡含突破材料和天赋升级材料</span></div>
+      <div><b>#图鉴 银釭</b><span>不写分类时全库搜索，唯一结果直接出图</span></div>
+      <div><b>#图鉴 武器 狼末</b><span>支持简称；多个结果先出列表</span></div>
+      <div><b>#图鉴 胡桃</b><span>多个结果会出列表，再用 #图鉴2 打开</span></div>
+      <div><b>#图鉴目录 武器</b><span>浏览该分类，翻页用 #图鉴目录 武器 2</span></div>
+    </div>`
+    await this.replyImage(e, this.wrapHtml({
+      title: '观测枢图鉴',
+      subtitle: '数据来自米游社观测枢公开词条',
+      body,
+      footer: '分类：角色 / 武器 / 圣遗物 / 敌人 / 食物 / 材料',
+      extraCss: '.help-list{display:flex;flex-direction:column;gap:10px}.help-list div{display:flex;justify-content:space-between;gap:16px;padding:12px 14px;background:#f8fafc;border-radius:12px}.help-list b{color:#1d4ed8;white-space:nowrap}.help-list span{color:#475569;text-align:right}',
+    }), '发送 #图鉴 名称 查询，例如 #图鉴 银釭')
+    return true
+  }
+
+  async showCatalog(e) {
+    const matched = String(e.msg || '').match(/^#?图鉴(?:目录|列表|分类)(?:\s+(\S+))?(?:\s+(\d+))?$/)
+    const name = matched?.[1] || ''
+    const page = parseInt(matched?.[2] || '1', 10)
+    if (!name) {
+      const cards = WIKI_CHANNELS.map(channel => `<div class="channel">${escapeHtml(channel.name)}</div>`).join('')
+      await this.replyImage(e, this.wrapHtml({
+        title: '图鉴目录',
+        subtitle: '发送 #图鉴目录 分类名',
+        body: `<div class="channels">${cards}</div>`,
+        footer: '例如 #图鉴目录 武器',
+        extraCss: '.channels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.channel{padding:18px 8px;text-align:center;background:#f8fafc;border-radius:14px;font-size:18px;font-weight:800;color:#1e293b}',
+      }))
+      return true
+    }
+
+    const channel = WIKI_CHANNELS.find(item => item.name === name || item.aliases.includes(name))
+    if (!channel) {
+      await e.reply('没有这个分类。可选：角色、武器、圣遗物、敌人、食物、材料')
+      return true
+    }
+
+    try {
+      const result = await listWikiChannel(channel, page)
+      const cards = result.items.map((item, index) => {
+        const no = (result.page - 1) * 24 + index + 1
+        const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : '<span class="placeholder"></span>'
+        return `<div class="card">${icon}<div><b>${no}. ${escapeHtml(item.name)}</b></div></div>`
+      }).join('')
+      await this.replyImage(e, this.wrapHtml({
+        title: `${channel.name}图鉴`,
+        subtitle: `第 ${result.page}/${result.totalPage} 页，共 ${result.total} 条`,
+        body: `<div class="grid">${cards}</div>`,
+        footer: result.page < result.totalPage ? `下一页：#图鉴目录 ${channel.name} ${result.page + 1}` : '已是最后一页',
+        extraCss: '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{display:flex;align-items:center;gap:8px;min-height:58px;padding:8px;background:#f8fafc;border-radius:12px}.card img,.placeholder{width:42px;height:42px;border-radius:10px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.card b{font-size:13px;color:#1e293b;line-height:1.35}',
+      }))
+    } catch (err) {
+      logger.error('[观测枢图鉴]', err)
+      await e.reply('图鉴目录获取失败，请稍后重试')
+    }
+    return true
+  }
+
+  async replyImage(e, html, fallback) {
+    const img = await this.render(html)
+    if (img) return e.reply(img)
+    return e.reply(fallback || '图片渲染失败，请稍后重试')
+  }
+
+  entryHtml(entry) {
+    const icon = entry.icon ? `<img class="cover" src="${escapeHtml(entry.icon)}" alt="">` : ''
+    const tags = (entry.tags || []).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
+    const attrs = (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
+    const sections = (entry.sections || []).map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups, section.total)}</section>`).join('')
+    return `<div class="entry">${icon}<div class="entry-main"><h2>${escapeHtml(entry.name)}</h2><div class="tags">${tags}</div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}</div></div>${sections}`
+  }
+
+  resultListHtml(results, page, keyword) {
+    const start = (page - 1) * WIKI_PAGE_SIZE
+    const pageItems = results.slice(start, start + WIKI_PAGE_SIZE)
+    const totalPage = Math.max(1, Math.ceil(results.length / WIKI_PAGE_SIZE))
+    const rows = pageItems.map((item, index) => {
+      const no = start + index + 1
+      const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : '<span class="placeholder"></span>'
+      const summary = clipText(item.summary || '', 42)
+      return `<div class="result">${icon}<div><b>${no}. ${escapeHtml(item.name)}</b><span>${escapeHtml(item.channelName || '词条')}</span>${summary ? `<em>${escapeHtml(summary)}</em>` : ''}</div></div>`
+    }).join('')
+    return {
+      totalPage,
+      body: `<div class="results">${rows}</div>`,
+      footer: `发送 #图鉴序号 查看，例如 #图鉴${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`,
+    }
+  }
+
+  sessionKey(e) {
+    return e.group_id ? `wiki:g:${e.group_id}` : `wiki:u:${e.user_id}`
+  }
+
+  async showEntry(e, target, extraFooter = '') {
+    const entry = await getWikiEntry(target.id)
+    await this.replyImage(e, this.wrapHtml({
+      title: entry.name,
+      subtitle: target.channelName || '观测枢词条',
+      body: this.entryHtml(entry),
+      footer: extraFooter || '数据来源：米游社观测枢',
+      extraCss: entryCss,
+    }))
+  }
+
+  async queryAlias(e) {
+    const matched = String(e.msg || '').match(/^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\s*(\S+)$/)
+    if (!matched) return false
+    e.msg = `#图鉴 ${matched[1]} ${matched[2]}`
+    return this.query(e)
+  }
+
+  async query(e) {
+    const input = String(e.msg || '').replace(/^#?(?:图鉴|观测枢|wiki)\s*/i, '').trim()
+    if (!input || /^(帮助|菜单)$/.test(input)) return this.showHelp(e)
+    const parsed = parseWikiQuery(input)
+    const key = this.sessionKey(e)
+
+    try {
+      if (/^\d+$/.test(input)) {
+        const cached = sessions.get(key)
+        const target = cached && Date.now() - cached.time < 10 * 60 * 1000
+          ? cached.results[parseInt(input, 10) - 1]
+          : null
+        if (!target) {
+          await e.reply('没有这条序号。请先搜索，例如 #图鉴 银釭')
+          return true
+        }
+        await this.showEntry(e, target)
+        return true
+      }
+
+      if (!parsed.keyword && parsed.channel) {
+        e.msg = `#图鉴目录 ${parsed.channel.name}${parsed.page > 1 ? ' ' + parsed.page : ''}`
+        return this.showCatalog(e)
+      }
+
+      const results = await searchWiki(parsed.keyword, { channelId: parsed.channel?.id || 0, limit: 20 })
+      if (!results.length) {
+        await e.reply(`没有找到「${parsed.keyword}」。可以换成更完整的名字，或加分类，例如 #图鉴 武器 ${parsed.keyword}`)
+        return true
+      }
+      sessions.set(key, { results, keyword: parsed.keyword, time: Date.now() })
+
+      const exactCount = results.filter(item => item.score === 100).length
+      if (results[0].score === 100 && exactCount === 1 && parsed.page === 1) {
+        const extra = results.length > 1 ? `还有 ${results.length - 1} 个相关结果，发送 #图鉴2 查看` : ''
+        await this.showEntry(e, results[0], extra)
+        return true
+      }
+
+      const view = this.resultListHtml(results, parsed.page, [parsed.channel?.name, parsed.keyword].filter(Boolean).join(' '))
+      await this.replyImage(e, this.wrapHtml({
+        title: `「${parsed.keyword}」的搜索结果`,
+        subtitle: parsed.channel ? `分类：${parsed.channel.name}` : '发送序号查看详情',
+        body: view.body,
+        footer: view.footer,
+        extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+      }))
+    } catch (err) {
+      logger.error('[观测枢图鉴]', err)
+      await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+    }
+    return true
+  }
+}
+

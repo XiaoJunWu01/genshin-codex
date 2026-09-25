@@ -1,0 +1,7 @@
+node_modules/
+temp/
+*.log
+.DS_Store
+Thumbs.db
+config/config.json
+!config/config_default.json

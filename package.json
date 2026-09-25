@@ -1,0 +1,35 @@
+{
+  "name": "ys-wiki-plugin",
+  "version": "1.0.0",
+  "description": "Yunzai-Bot 原神观测枢图鉴插件，查询角色、武器、圣遗物、魔物和食物",
+  "type": "module",
+  "main": "index.js",
+  "author": "xiaowu",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/wubaojun/ys-wiki-plugin.git"
+  },
+  "keywords": [
+    "yunzai",
+    "yunzai-bot",
+    "miao-yunzai",
+    "genshin",
+    "wiki",
+    "mihoyo"
+  ],
+  "files": [
+    "apps",
+    "config",
+    "model",
+    "resources",
+    "index.js",
+    "package.json",
+    "README.md",
+    "LICENSE"
+  ],
+  "yunzai": {
+    "name": "ys-wiki-plugin",
+    "title": "观测枢图鉴"
+  }
+}
