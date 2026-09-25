@@ -5,7 +5,7 @@
 ## 安装
 
 ```bash
-git clone https://gitee.com/wubaojun/ys-wiki-plugin.git ./plugins/ys-wiki-plugin
+git clone https://gitee.com/wubaojun/genshin-codex.git ./plugins/genshin-codex
 ```
 
 然后重启 Yunzai。
@@ -39,7 +39,7 @@ git clone https://gitee.com/wubaojun/ys-wiki-plugin.git ./plugins/ys-wiki-plugin
 ## 目录
 
 ```text
-ys-wiki-plugin/
+genshin-codex/
 ├─ apps/wiki.js      指令与图片渲染
 ├─ model/wiki.js     观测枢搜索和词条解析
 ├─ config/           底图与样式配置

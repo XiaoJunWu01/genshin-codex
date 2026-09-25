@@ -1,5 +1,5 @@
 {
-  "name": "ys-wiki-plugin",
+  "name": "genshin-codex",
   "version": "1.0.0",
   "description": "Yunzai-Bot 原神观测枢图鉴插件，查询角色、武器、圣遗物、魔物和食物",
   "type": "module",
@@ -8,7 +8,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://gitee.com/wubaojun/ys-wiki-plugin.git"
+    "url": "https://gitee.com/wubaojun/genshin-codex.git"
   },
   "keywords": [
     "yunzai",
@@ -29,7 +29,7 @@
     "LICENSE"
   ],
   "yunzai": {
-    "name": "ys-wiki-plugin",
+    "name": "genshin-codex",
     "title": "观测枢图鉴"
   }
 }
