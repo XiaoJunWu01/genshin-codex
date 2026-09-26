@@ -17,6 +17,7 @@ import {
   listWikiChannel,
   parseWikiQuery,
   searchWiki,
+  suggestWiki,
 } from '../model/wiki.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -268,8 +269,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['胡桃立绘', '全身立绘原图'],
         ['胡桃动作', '待机和技能动图'],
         ['g薇纳斯', '直接查角色'],
-        ['沃雅尼莎立绘', '差一个字也能对上'],
         ['#图鉴2', '打开上次第 2 条'],
+        ['胡挑', '打错会问是不是胡桃'],
         ['#图鉴视频开', `视频当前${on ? '已开启' : '已关闭'}`],
       ]],
       ['其他图鉴', [
@@ -293,7 +294,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         <h2>${title}</h2>
         <div class="grid">${items.map(([cmd, desc]) => `<div class="cell"><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">名字能对上就直接出图。新角色随观测枢更新，不用改插件。${version ? ' v' + escapeHtml(version) : ''}</div>
+      <div class="foot">能对上就直接出图。差一两个字会问你是不是这个，回复序号打开。${version ? ' v' + escapeHtml(version) : ''}</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
@@ -566,6 +567,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     try {
       const results = await searchWiki(keyword, { channelId: 25, limit: 8 })
       if (!results.length) {
+        if (await this.offerSuggestions(e, keyword, 25, focus.id)) return true
         await e.reply(`没有找到角色「${keyword}」。可以换成更完整的名字，例如 #g${focus.name} 胡桃`)
         return true
       }
@@ -597,6 +599,15 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return this.query(e)
   }
 
+  async offerSuggestions(e, keyword, channelId = 0, focus = '') {
+    const suggestions = await suggestWiki(keyword, { channelId, limit: 3 })
+    if (!suggestions.length) return false
+    sessions.set(this.sessionKey(e), { results: suggestions, keyword, focus, suggest: true, time: Date.now() })
+    const lines = suggestions.map((item, index) => `${index + 1}. ${item.name}${item.channelName ? '（' + item.channelName + '）' : ''}`)
+    await e.reply(`没有找到「${keyword}」。是不是要找：\n${lines.join('\n')}\n回复 1 或 #图鉴1 打开，10 分钟内有效。`)
+    return true
+  }
+
   async query(e) {
     const input = String(e.msg || '').replace(/^#?(?:图鉴|观测枢|wiki)\s*/i, '').trim()
     if (!input || /^(帮助|菜单)$/.test(input)) return this.showHelp(e)
@@ -624,6 +635,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
       const results = await searchWiki(parsed.keyword, { channelId: parsed.channel?.id || 0, limit: 20 })
       if (!results.length) {
+        if (await this.offerSuggestions(e, parsed.keyword, parsed.channel?.id || 0)) return true
         await e.reply(`没有找到「${parsed.keyword}」。可以换成更完整的名字，或加分类，例如 #图鉴 武器 ${parsed.keyword}`)
         return true
       }

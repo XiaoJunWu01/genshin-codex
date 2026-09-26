@@ -286,6 +286,33 @@ async function searchRemote(keyword) {
 
 const CARD_CHANNELS = new Set(['行动牌', '角色牌', '名片', '装扮', '角色视频'])
 
+function editDistance(left, right) {
+  if (left === right) return 0
+  const width = right.length + 1
+  const row = Array.from({ length: width }, (_, index) => index)
+  for (let i = 1; i <= left.length; i += 1) {
+    let previous = row[0]
+    row[0] = i
+    for (let j = 1; j <= right.length; j += 1) {
+      const current = row[j]
+      row[j] = left[i - 1] === right[j - 1]
+        ? previous
+        : Math.min(previous, row[j], row[j - 1]) + 1
+      previous = current
+    }
+  }
+  return row[width - 1]
+}
+
+function nearScore(query, value) {
+  if (!query || !value || query.length < 2 || value.length < 2) return 0
+  if (Math.abs(query.length - value.length) > 2) return 0
+  const edits = editDistance(query, value)
+  const limit = query.length >= 4 ? 2 : 1
+  if (!edits || edits > limit) return 0
+  return edits === 1 ? 72 : 64
+}
+
 function scoreItem(item, keyword) {
   const query = normalizeName(keyword)
   const name = normalizeName(item.name)
@@ -302,8 +329,9 @@ function scoreItem(item, keyword) {
   }
 
   const mapped = aliasTargets(keyword).some(target => normalizeName(target) === name)
-  let score = Math.max(rank(name), rank(alias), mapped ? 100 : 0)
-  if (!score && query.length >= 2 && [...query].every(char => name.includes(char))) score = 50
+  const partial = !mapped && query.length >= 2 && [...query].every(char => name.includes(char))
+  let score = Math.max(rank(name), rank(alias), mapped ? 100 : 0, partial ? 95 : 0)
+  if (!score) score = Math.max(nearScore(query, name), nearScore(query, alias))
   if (!score) return 0
   if (CARD_CHANNELS.has(item.channelName) && score >= 95) score -= 5
   return score
@@ -336,7 +364,7 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
 
   let results = [...collected.values()]
     .map(item => ({ ...item, score: scoreItem(item, text) }))
-    .filter(item => item.score > 0)
+    .filter(item => item.score >= 95)
     .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
 
   if (!results.length && !channelId) {
@@ -344,11 +372,35 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
     for (const items of lists) items.forEach(add)
     results = [...collected.values()]
       .map(item => ({ ...item, score: scoreItem(item, text) }))
-      .filter(item => item.score > 0)
+      .filter(item => item.score >= 95)
       .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
   }
 
   return results.slice(0, limit)
+}
+
+async function catalogItems(channelId = 0) {
+  const channels = channelId ? WIKI_CHANNELS.filter(channel => channel.id === channelId) : WIKI_CHANNELS
+  const lists = await Promise.all(channels.map(channel => getChannelItems(channel.id).catch(() => [])))
+  return lists.flat()
+}
+
+export async function suggestWiki(keyword, { channelId = 0, limit = 3 } = {}) {
+  const text = String(keyword || '').trim()
+  const query = normalizeName(text)
+  if (query.length < 2) return []
+  const seen = new Set()
+  return (await catalogItems(channelId))
+    .map(item => ({ ...item, score: scoreItem(item, text) }))
+    .filter(item => item.score >= 64 && item.score < 95)
+    .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
+    .filter(item => {
+      const key = normalizeName(item.name)
+      if (!key || seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    .slice(0, limit)
 }
 
 export async function listWikiChannel(channel, page = 1) {
