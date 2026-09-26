@@ -81,7 +81,7 @@ function getBackgroundImageUrl() {
   return fs.existsSync(filePath) ? pathToFileURLSafe(filePath) : ''
 }
 
-function cardsHtml(cards) {
+export function cardsHtml(cards) {
   const items = cards || []
   if (!items.length) return ''
   return `<div class="equips">${items.map((card, index) => {
@@ -107,7 +107,7 @@ const ELEMENT_THEMES = {
   草: ['#6D9840', '#f4faec', '#243814'],
 }
 
-function themeOf(entry) {
+export function themeOf(entry) {
   const theme = entry?.theme || {}
   const preset = ELEMENT_THEMES[theme.element] || ['#456990', '#f4f7fb', '#1e293b']
   return {
@@ -149,9 +149,9 @@ function groupsHtml(groups, total = []) {
   return rows || summary ? `<div class="levels">${rows}${summary}</div>` : ''
 }
 
-const resultCss = '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}.result img,.placeholder{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#f1f5f9;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:15px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px}.result em{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#64748b;font-style:normal;font-size:12px;line-height:1.5}'
+export const resultCss = '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}.result img,.placeholder{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#f1f5f9;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:15px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px}.result em{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#64748b;font-style:normal;font-size:12px;line-height:1.5}'
 
-const entryCss = `
+export const entryCss = `
 .hero{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid rgba(15,23,42,.08);border-radius:16px;background:linear-gradient(135deg,#fff,var(--soft))}
 .cover{width:92px;height:92px;object-fit:contain;border-radius:20px;background:radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);border:1px solid rgba(15,23,42,.06);flex-shrink:0}
 .hero h2{color:var(--ink);font-size:30px;line-height:1.1}

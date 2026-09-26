@@ -15,25 +15,32 @@ const GAMES = {
   },
 }
 
-export const GAME_CHANNELS = {
-  sr: [
-    { id: 18, name: '角色', aliases: ['角色', '人物'] },
-    { id: 19, name: '光锥', aliases: ['光锥'] },
-    { id: 30, name: '遗器', aliases: ['遗器'] },
-    { id: 23, name: '敌人', aliases: ['敌人', '怪物'] },
-    { id: 20, name: '材料', aliases: ['材料', '养成材料'] },
-    { id: 36, name: '消耗品', aliases: ['消耗品', '食物'] },
-    { id: 31, name: '阅读物', aliases: ['阅读物', '书籍', '书'], heavy: true },
-  ],
-  zzz: [
-    { id: 43, name: '代理人', aliases: ['代理人', '角色', '人物'] },
-    { id: 45, name: '音擎', aliases: ['音擎'] },
-    { id: 46, name: '驱动盘', aliases: ['驱动盘'] },
-    { id: 44, name: '邦布', aliases: ['邦布'] },
-    { id: 65, name: '敌人', aliases: ['敌人', '怪物'] },
-    { id: 47, name: '材料', aliases: ['材料', '素材'] },
-    { id: 7, name: '鸣徽', aliases: ['鸣徽'] },
-  ],
+const CHANNEL_ALIASES = {
+  角色: ['人物'],
+  代理人: ['角色', '人物'],
+  消耗品: ['食物'],
+  阅读物: ['书籍', '书'],
+  敌人: ['怪物'],
+  材料: ['养成材料', '素材'],
+}
+const CHANNEL_SKIP = /攻略|成就|模拟宇宙|忘却之庭|虚构叙事|末日幻影|异相仲裁|逐光捡金|连战|活动/
+const CACHE_TTL = 30 * 60 * 1000
+const LIST_TTL = 6 * 60 * 60 * 1000
+const cache = { channels: new Map(), lists: new Map(), searches: new Map(), entries: new Map() }
+
+export async function channelsOf(key) {
+  const game = gameOf(key)
+  if (!game) return []
+  const cached = cache.channels.get(key)
+  if (cached && Date.now() - cached.time < LIST_TTL) return cached.items
+  const data = await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/getChannelTree?app_sn=${game.app}`)
+  const root = (data?.children || []).find(node => node?.name === '游戏图鉴') || data
+  const items = (root?.children || [])
+    .filter(node => node?.channel_id && node?.name && !node.hidden && !(node.children || []).length && !CHANNEL_SKIP.test(node.name))
+    .map(node => ({ id: Number(node.channel_id), name: node.name, aliases: [node.name, ...(CHANNEL_ALIASES[node.name] || [])] }))
+  if (!items.length) throw new Error('图鉴分类为空')
+  cache.channels.set(key, { time: Date.now(), items })
+  return items
 }
 
 export const GAME_FOCUS = {
@@ -51,34 +58,29 @@ export const GAME_FOCUS = {
   ],
 }
 
-const CACHE_TTL = 30 * 60 * 1000
-const LIST_TTL = 6 * 60 * 60 * 1000
-const cache = { lists: new Map(), searches: new Map(), entries: new Map() }
-
 const fetchCompat = (...args) => {
   if (typeof globalThis.fetch === 'function') return globalThis.fetch(...args)
   return import('node-fetch').then(mod => mod.default(...args))
 }
 
 export function gameOf(key) { return GAMES[key] || null }
-export function channelsOf(key) { return GAME_CHANNELS[key] || [] }
 
 export function focusOf(key, keyword) {
   const text = String(keyword || '').trim()
   return (GAME_FOCUS[key] || []).find(item => item.id === text || item.aliases.includes(text)) || null
 }
 
-export function channelOf(key, keyword) {
+export async function channelOf(key, keyword) {
   const text = String(keyword || '').trim()
-  return channelsOf(key).find(item => item.name === text || item.aliases.includes(text)) || null
+  return (await channelsOf(key)).find(item => item.name === text || item.aliases.includes(text)) || null
 }
 
 export function focusPattern(key) {
   return (GAME_FOCUS[key] || []).flatMap(item => item.aliases).sort((a, b) => b.length - a.length).join('|')
 }
 
-export function channelPattern(key) {
-  return channelsOf(key).flatMap(item => item.aliases).sort((a, b) => b.length - a.length).join('|')
+export async function channelPattern(key) {
+  return (await channelsOf(key)).flatMap(item => item.aliases).sort((a, b) => b.length - a.length).join('|')
 }
 
 function headersOf(game) {
@@ -196,13 +198,13 @@ export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}
     if (!prev || score > prev.score) collected.set(item.id, { ...item, score })
   }
   if (channelId) {
-    const channel = channelsOf(key).find(item => item.id === channelId)
+    const channel = (await channelsOf(key)).find(item => item.id === channelId)
     if (channel) for (const item of await listItems(game, channel)) add(item)
   } else {
     try { for (const item of await searchRemote(game, text)) add(item) }
     catch (err) { logger.warn(`[${game.name}图鉴] 搜索失败，改用目录:`, err.message || err) }
     if (!collected.size) {
-      const lists = await Promise.all(channelsOf(key).filter(item => !item.heavy).map(item => listItems(game, item).catch(() => [])))
+      const lists = await Promise.all((await channelsOf(key)).map(item => listItems(game, item).catch(() => [])))
       for (const items of lists) items.forEach(add)
     }
   }
@@ -230,11 +232,24 @@ function section(title, lines = [], cards = [], focus = '') {
 }
 
 function cardsFromHtml(html) {
-  return [...String(html || '').matchAll(/<tr[\s\S]*?<\/tr>/gi)].map(row => {
-    const cells = [...row[0].matchAll(/<td[\s\S]*?<\/td>/gi)].map(cell => stripHtml(cell[0]))
-    const image = row[0].match(/data-image-url=\\"([^\\"]+)\\"/)?.[1] || ''
-    return cells.length >= 2 ? { name: cells[0], text: cells.slice(1).join('\n'), icon: image } : null
-  }).filter(Boolean)
+  const rows = [...String(html || '').matchAll(/<tr[\s\S]*?<\/tr>/gi)].map(row => row[0])
+  const cards = []
+  const iconsIn = value => [...String(value).replace(/\\"/g, '"').matchAll(/data-(?:image-url|entry-icon)="([^"]+)"/g)].map(item => item[1])
+  for (let index = 0; index < rows.length; index += 1) {
+    const cells = [...rows[index].matchAll(/<td[\s\S]*?<\/td>/gi)].map(cell => cell[0])
+    if (cells.length < 2) continue
+    const span = Number(cells[0].match(/rowspan="(\d+)"/)?.[1] || 1)
+    const covered = rows.slice(index, index + span).join('')
+    const icons = iconsIn(covered)
+    const heading = cells.find(cell => /<h[1-6]/i.test(cell))
+    const name = textOf(heading?.match(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/i)?.[1] || '')
+      || [...covered.replace(/\\"/g, '"').matchAll(/data-entry-title="([^"]+)"/g)].map(item => item[1]).find(Boolean)
+      || ''
+    const text = stripHtml(covered).replace(name, '').trim()
+    if (name && (text || icons.length)) cards.push({ name, text, icons })
+    if (span > 1) index += span - 1
+  }
+  return cards
 }
 
 function remember(sections, parts, block) {
@@ -296,7 +311,12 @@ function formatWiki(game, page) {
         })).filter(item => item.name && item.text)
         remember(sections, parts, section(module.name || '技能', [], cards.slice(0, 8), 'skill'))
       } else if (id === 'double_col_table') {
-        const cards = (data.tables || []).flatMap(table => (table.row || []).map(row => ({ name: stripHtml(row[0]), text: stripHtml(row[1]) })))
+        const cards = (data.tables || []).flatMap(table => (table.row || []).map(row => {
+          const source = Array.isArray(row) ? row : Object.values(row || {})
+          const icon = source.map(cell => String(cell).replace(/\\"/g, '"').match(/data-(?:image-url|entry-icon)="([^"]+)"/)?.[1] || '').find(Boolean) || ''
+          const textCells = source.map(cell => stripHtml(cell)).filter(Boolean)
+          return { name: textCells[0] || '', text: textCells.slice(1).join('\n'), icon }
+        }))
         remember(sections, parts, section(module.name || '影画', [], cards.filter(item => item.name && item.text).slice(0, 6), 'cinema'))
       } else if (/base_info/.test(id)) {
         const lines = Object.entries(data.attr || {}).slice(0, 8).map(([key, value]) => `${key}：${textOf(value?.value || value)}`)
