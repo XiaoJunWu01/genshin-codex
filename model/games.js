@@ -4,12 +4,12 @@ const SEARCH_BASE = 'https://api-takumi.mihoyo.com'
 
 const GAMES = {
   sr: {
-    key: 'sr', name: '星穹铁道', short: '星铁', app: 'sr_wiki',
+    key: 'sr', name: '星穹铁道', short: '星铁', letter: 's', app: 'sr_wiki',
     referer: 'https://bbs.mihoyo.com/sr/wiki/',
     site: 'https://bbs.mihoyo.com/sr/wiki', detail: 'rpg',
   },
   zzz: {
-    key: 'zzz', name: '绝区零', short: '绝区零', app: 'zzz_wiki', wikiApp: 'zzz',
+    key: 'zzz', name: '绝区零', short: '绝区零', letter: 'z', app: 'zzz_wiki', wikiApp: 'zzz',
     referer: 'https://baike.mihoyo.com/zzz/wiki/',
     site: 'https://baike.mihoyo.com/zzz/wiki', detail: 'wiki',
   },
