@@ -10,6 +10,7 @@ import {
   WIKI_FOCUS_PATTERN,
   WIKI_PAGE_SIZE,
   clipText,
+  findWikiChannel,
   findWikiFocus,
   getWikiEntry,
   listWikiChannel,
@@ -20,6 +21,9 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.join(__dirname, '..')
 const sessions = new Map()
+const videoEnabled = new Map()
+const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a, b) => b.length - a.length).join('|')
+const shortPattern = `^(?:#?g)?(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -174,10 +178,14 @@ export default class WikiPlugin extends plugin {
       priority: 500,
       rule: [
         { reg: '^#?(?:g)?(?:图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
+        { reg: '^#?图鉴视频(?:\\s*(开|关))?$', fnc: 'toggleVideo' },
         { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
         { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
         { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
+        { reg: '^#?([^\\s#]{1,12})(立绘|原画|全身|展示|动作|待机)$', fnc: 'queryMedia', priority: 70 },
+        { reg: `^#?g(?!(?:${WIKI_FOCUS_PATTERN}))\\s*(\\S+)$`, fnc: 'queryG', priority: 75 },
+        { reg: shortPattern, fnc: 'queryShort', priority: 80 },
       ],
     })
   }
@@ -221,34 +229,21 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async showHelp(e) {
-    const body = `<div class="help-list">
-      <div class="help-title">角色</div>
-      <div><b>#角色 胡桃</b><span>总览：资料、推荐装备、特殊料理</span></div>
-      <div><b>#g天赋 胡桃</b><span>天赋全文和升级材料</span></div>
-      <div><b>#g命座 胡桃</b><span>六条命之座</span></div>
-      <div><b>#g突破 胡桃</b><span>各阶段突破材料和满级合计</span></div>
-      <div><b>#g故事 胡桃</b><span>角色介绍、故事和配音</span></div>
-      <div><b>#g资料 胡桃</b><span>生日、定位、所属、称号</span></div>
-      <div><b>#g立绘 胡桃</b><span>全身立绘</span></div>
-      <div><b>#g展示 胡桃</b><span>待机和技能动作</span></div>
-      <div class="help-title">其他图鉴</div>
-      <div><b>#武器 狼的末路</b><span>武器属性和突破材料</span></div>
-      <div><b>#圣遗物 绝缘之旗印</b><span>套装效果、单件和推荐角色</span></div>
-      <div><b>#敌人 丘丘人</b><span>敌人资料。#魔物 相同</span></div>
-      <div><b>#食物 甜甜花酿鸡</b><span>食谱材料和食用效果</span></div>
-      <div><b>#材料 霓裳花</b><span>材料来源和用途</span></div>
-      <div class="help-title">搜索</div>
-      <div><b>#图鉴 银釭</b><span>不限分类搜索，唯一结果直接出图</span></div>
-      <div><b>#图鉴2</b><span>打开刚才搜索结果的第 2 条</span></div>
-      <div><b>#图鉴目录 武器</b><span>浏览分类，翻页加数字</span></div>
+    const on = this.videoOn(e)
+    const body = `<div class="help">
+      <div class="brand"><b>观测枢图鉴</b><span>miHoYo</span></div>
+      <div class="cols">
+        <div><em>角色</em><p><b>#角色 胡桃</b>总览</p><p><b>#g天赋 胡桃</b>天赋和材料</p><p><b>#g命座 胡桃</b>六条命座</p><p><b>#g突破 胡桃</b>突破材料</p><p><b>#g故事 胡桃</b>故事和配音</p><p><b>#g资料 胡桃</b>生日和称号</p></div>
+        <div><em>图和动作</em><p><b>胡桃立绘</b>全身原图</p><p><b>胡桃动作</b>动作动图</p><p><b>g薇纳斯</b>角色总览</p><p><b>饰金圣遗物</b>套装图鉴</p><p><b>丘丘人敌人</b>敌人图鉴</p><p><b>#图鉴2</b>打开上次第 2 条</p></div>
+      </div>
+      <div class="note">名字能对上唯一词条时直接出图，只有重名才给列表。视频解析当前${on ? '已开启' : '已关闭'}，用 #图鉴视频开 或 #图鉴视频关。</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
-      subtitle: '数据来自米游社观测枢公开词条',
       body,
-      footer: '角色细分都加 g：天赋、命座、突破、故事、资料、立绘、展示。支持雷神、万叶这类别名。裸写 #胡桃 不会触发。',
-      extraCss: '.help-list{display:flex;flex-direction:column;gap:8px}.help-title{margin-top:4px;color:#64748b;font-size:12px;font-weight:800}.help-list div{display:flex;justify-content:space-between;gap:16px;padding:10px 12px;background:#f8fafc;border-radius:12px}.help-title{display:block;padding:2px 2px 0;background:transparent}.help-list b{color:#1d4ed8;white-space:nowrap}.help-list span{color:#475569;text-align:right}',
-    }), '发送 #图鉴 名称 查询，例如 #图鉴 银釭')
+      footer: '数据来自米游社观测枢。裸写 #胡桃 不会触发。',
+      extraCss: '.help{display:flex;flex-direction:column;gap:14px}.brand{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:10px;border-bottom:2px solid #dbe3ee}.brand b{color:#1e293b;font-size:28px}.brand span{padding:4px 10px;border-radius:8px;background:#111827;color:#fff;font-size:13px;font-weight:800;letter-spacing:.08em}.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols div{padding:12px;border-radius:14px;background:#f8fafc}.cols em{display:block;margin-bottom:6px;color:#64748b;font-style:normal;font-size:12px;font-weight:800}.cols p{margin-top:6px;color:#475569;font-size:13px;line-height:1.45}.cols b{margin-right:8px;color:#1d4ed8}.note{color:#475569;font-size:13px;line-height:1.7}',
+    }), '发送 #角色 胡桃，或 胡桃立绘')
     return true
   }
 
@@ -356,6 +351,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async showEntry(e, target, extraFooter = '', focus = null) {
     const entry = await getWikiEntry(target.id)
+    if (focus?.id === 'portrait') return this.sendPortraits(e, entry)
+    if (focus?.id === 'showcase') return this.sendMotions(e, entry)
+    if (focus?.id === 'video' || (!focus && entry.videos?.length && !entry.sections?.length)) {
+      return this.sendVideos(e, entry)
+    }
     const part = focus ? entry.parts?.[focus.id] || [] : null
     if (focus && !part.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #角色 ${entry.name}`)
@@ -374,6 +374,97 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }))
   }
 
+  videoOn(e) {
+    return videoEnabled.get(this.sessionKey(e)) === true
+  }
+
+  async toggleVideo(e) {
+    const matched = String(e.msg || '').match(/^#?图鉴视频(?:\s*(开|关))?$/)
+    const key = this.sessionKey(e)
+    const next = matched?.[1] ? matched[1] === '开' : !this.videoOn(e)
+    videoEnabled.set(key, next)
+    await e.reply(next
+      ? '已开启本插件的角色视频解析。查询角色视频词条时会直接发视频，其他链接仍不处理。'
+      : '已关闭角色视频解析。')
+    return true
+  }
+
+  async sendPortraits(e, entry) {
+    const pictures = entry.portraits?.length ? entry.portraits : (entry.theme?.portrait ? [{ src: entry.theme.portrait, name: entry.name }] : [])
+    if (!pictures.length) {
+      await e.reply(`「${entry.name}」还没有全身立绘。`)
+      return
+    }
+    const sent = []
+    for (const picture of pictures) {
+      const img = segment.image(picture.src)
+      sent.push(picture.name && pictures.length > 1 ? [picture.name, img] : img)
+    }
+    await e.reply(sent.flat())
+  }
+
+  async sendMotions(e, entry) {
+    const motions = entry.motions || []
+    if (!motions.length) {
+      await e.reply(`「${entry.name}」还没有动作展示。`)
+      return
+    }
+    if (!e.group?.makeForwardMsg) {
+      await e.reply(['动作展示：', ...motions.flatMap(item => [item.name || '动作', segment.image(item.src)])])
+      return
+    }
+    const forward = await e.group.makeForwardMsg(motions.map(item => ({
+      message: [item.name || '动作', segment.image(item.src)],
+      nickname: entry.name,
+    })))
+    await e.reply(forward)
+  }
+
+  uniqueHit(results) {
+    if (results.length === 1) return results[0]
+    const exact = results.filter(item => item.score >= 100)
+    return exact.length === 1 ? exact[0] : null
+  }
+
+  async sendVideos(e, entry) {
+    if (!this.videoOn(e)) {
+      await e.reply('角色视频解析默认关闭。发送 #图鉴视频开 后，再查这一条。')
+      return
+    }
+    const clips = entry.videos || []
+    if (!clips.length) {
+      await e.reply(`「${entry.name}」没有可播放的视频。`)
+      return
+    }
+    await e.reply(clips.flatMap(clip => [clip.name || entry.name, segment.video(clip.src)]))
+  }
+
+  async queryShort(e) {
+    const matched = String(e.msg || '').match(new RegExp(shortPattern))
+    const channel = findWikiChannel(matched?.[3])
+    const keyword = String(matched?.[2] || '').trim()
+    if (!channel || !keyword || keyword.length > 12 || /^(图鉴|观测枢|wiki)$/.test(keyword)) return false
+    const focus = findWikiFocus(matched?.[1])
+    e.msg = focus ? `#g${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
+    return focus ? this.queryFocus(e) : this.query(e)
+  }
+
+  async queryMedia(e) {
+    const matched = String(e.msg || '').match(/^#?([^\s#]{1,12})(立绘|原画|全身|展示|动作|待机)$/)
+    const focus = findWikiFocus(matched?.[2])
+    const keyword = matched?.[1] || ''
+    if (!focus || !keyword || /^(图鉴|观测枢|wiki|角色|武器)$/.test(keyword)) return false
+    e.msg = `#g${focus.name} ${keyword}`
+    return this.queryFocus(e)
+  }
+
+  async queryG(e) {
+    const keyword = String(e.msg || '').replace(/^#?g\s*/, '').trim()
+    if (!keyword || keyword.length > 12 || /帮助|视频|图鉴|目录|列表/.test(keyword)) return false
+    e.msg = `#图鉴 角色 ${keyword}`
+    return this.query(e)
+  }
+
   async queryFocus(e) {
     const matched = String(e.msg || '').match(new RegExp(`^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`))
     const focus = findWikiFocus(matched?.[1])
@@ -385,9 +476,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         await e.reply(`没有找到角色「${keyword}」。可以换成更完整的名字，例如 #g${focus.name} 胡桃`)
         return true
       }
-      const exact = results.filter(item => item.score === 100)
-      if (results[0].score === 100 && exact.length === 1) {
-        await this.showEntry(e, results[0], '', focus)
+      const chosen = this.uniqueHit(results)
+      if (chosen) {
+        await this.showEntry(e, chosen, '', focus)
         return true
       }
       sessions.set(this.sessionKey(e), { results, keyword, focus: focus.id, time: Date.now() })
@@ -445,10 +536,10 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }
       sessions.set(key, { results, keyword: parsed.keyword, time: Date.now() })
 
-      const exactCount = results.filter(item => item.score === 100).length
-      if (results[0].score === 100 && exactCount === 1 && parsed.page === 1) {
+      const chosen = parsed.page === 1 ? this.uniqueHit(results) : null
+      if (chosen) {
         const extra = results.length > 1 ? `还有 ${results.length - 1} 个相关结果，发送 #图鉴2 查看` : ''
-        await this.showEntry(e, results[0], extra)
+        await this.showEntry(e, chosen, extra)
         return true
       }
 

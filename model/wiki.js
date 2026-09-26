@@ -79,7 +79,7 @@ function normalizeName(value) {
 
 // 观测枢词条的 alias_name 是空的，角色俗称只能在本地维护。
 const CHARACTER_ALIASES = {
-  薇斯纳: ['维纳斯', '维纳', '维斯纳', '维斯娜'],
+  薇斯纳: ['维纳斯', '薇纳斯', '维纳', '维斯纳', '维斯娜'],
   沃雅妮莎: ['沃雅'],
   伊涅芙: ['伊涅'],
   菲林斯: ['菲林'],
@@ -400,12 +400,13 @@ function filtersOf(page) {
   })
 }
 
-function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = []) {
+function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = [], videos = []) {
   const content = (Array.isArray(lines) ? lines : [lines]).map(line => String(line || '').trim()).filter(Boolean)
   const materialGroups = (groups || []).filter(group => group.materials?.length)
   const cardItems = (cards || []).filter(card => card?.name || card?.text)
   const pictures = (images || []).filter(item => item?.src)
-  if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length) return
+  const clips = (videos || []).filter(item => item?.src)
+  if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length && !clips.length) return
   const limit = collapse ? 1800 : 4000
   sections.push({
     title: title || '详情',
@@ -414,6 +415,7 @@ function pushSection(sections, title, lines, collapse = false, groups = [], tota
     total: total || [],
     cards: cardItems,
     images: pictures,
+    videos: clips,
   })
 }
 
@@ -498,6 +500,14 @@ function imagesFromHtml(value) {
   const tagged = [...html.matchAll(/data-image-url="([^"]+)"/g)].map(match => match[1])
   const images = tagged.length ? tagged : [...html.matchAll(/<img[^>]+src="([^"]+)"/g)].map(match => match[1])
   return [...new Set(images.filter(Boolean))]
+}
+
+function videoFromHtml(value) {
+  const html = String(value ?? '')
+  const src = html.match(/data-video-url="([^"]+)"/)?.[1] || ''
+  if (!src) return null
+  const name = stripHtml(html).split('\n').find(Boolean) || ''
+  return { name, src }
 }
 
 function splitConstellations(html) {
@@ -643,7 +653,7 @@ function parseComponent(component, moduleName) {
   if (id === 'map_desc') {
     const images = (data.list || [])
       .filter(item => item?.image && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(item.image))
-      .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image }))
+      .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image, motion: /\.gif(\?|$)/i.test(item.image) }))
     return images.length ? { title, lines: [], images } : null
   }
   if (id === 'artifact_list_v2') {
@@ -654,11 +664,15 @@ function parseComponent(component, moduleName) {
     return { title, lines: attrPairs(data?.list || data?.attr, 8).map(attr => `${attr.key}：${attr.value}`) }
   }
   if (id === 'collapse_panel' || id === 'rich_text') {
+    const video = videoFromHtml(data?.rich_text)
+    if (video) return { title: title || '角色视频', lines: [], videos: [video] }
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
   }
   if (['role_voice', 'strategy', 'business_card', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
     return null
   }
+  const video = videoFromHtml(data?.rich_text)
+  if (video) return { title: title || '角色视频', lines: [], videos: [video] }
   if (data?.rich_text) return { title, lines: [stripHtml(data.rich_text)], collapse: true }
   return null
 }
@@ -771,9 +785,10 @@ function focusOf(title = '', images = []) {
   if (STORY_TITLE.test(title)) return 'story'
   if (PROFILE_TITLE.test(title)) return 'profile'
   if (/展示/.test(title) && images.length) {
-    const still = images.every(item => /\.(png|jpe?g|webp)(\?|$)/i.test(item.src) && !/待机|攻击|战技|爆发|重击/.test(item.name))
+    const still = images.every(item => !item.motion && /\.(png|jpe?g|webp)(\?|$)/i.test(item.src) && !/待机|攻击|战技|爆发|重击/.test(item.name))
     return still ? 'portrait' : 'showcase'
   }
+  if (/视频|PV|演示|预告/.test(title)) return 'video'
   return ''
 }
 
@@ -788,8 +803,8 @@ export function formatWikiEntry(page) {
     if (module.is_hidden) continue
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
-      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length && !parsed?.images?.length) continue
-      pending.push({ ...parsed, focus: focusOf(parsed.title, parsed.images || []) })
+      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length && !parsed?.images?.length && !parsed?.videos?.length) continue
+      pending.push({ ...parsed, focus: parsed.videos?.length ? 'video' : focusOf(parsed.title, parsed.images || []) })
     }
   }
 
@@ -809,21 +824,25 @@ export function formatWikiEntry(page) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
       previous.images = [...(previous.images || []), ...(parsed.images || [])]
+      previous.videos = [...(previous.videos || []), ...(parsed.videos || [])]
       if (parsed.lines?.length) previous.text = [previous.text, ...parsed.lines].filter(Boolean).join('\n')
       continue
     }
     const key = parsed.focus + parsed.title + parsed.lines.join('\n')
     if (seen.has(key)) continue
     seen.add(key)
-    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images)
+    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images, parsed.videos)
     const current = sections[sections.length - 1]
     if (current) current.focus = parsed.focus
   }
 
   const character = isCharacterPage(page)
+  const portraits = sections.flatMap(section => section.focus === 'portrait' ? section.images : [])
+  const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
+  const videos = sections.flatMap(section => section.videos || [])
   const overview = character
     ? sections.filter(section => /推荐装备|特殊料理|圣遗物|基础资料/.test(section.title)).slice(0, 4)
-    : sections.filter(section => !STORY_TITLE.test(section.title)).slice(0, 5)
+    : sections.filter(section => !STORY_TITLE.test(section.title) && section.focus !== 'video').slice(0, 5)
 
   return {
     id: String(page.id),
@@ -831,8 +850,11 @@ export function formatWikiEntry(page) {
     icon: header.icon,
     tags: header.tags,
     attrs: header.attrs,
-    theme: header.theme,
+    theme: { ...header.theme, portrait: portraits[0]?.src || '' },
     sections: overview,
+    portraits,
+    motions,
+    videos,
     parts: character ? {
       talent: sections.filter(section => section.focus === 'talent'),
       constellation: sections.filter(section => section.focus === 'constellation'),
