@@ -18,7 +18,6 @@ import {
   parseCatalogQuery,
   parseWikiQuery,
   searchWiki,
-  suggestWiki,
 } from '../model/wiki.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
@@ -208,8 +207,9 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
         { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
         { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
-        { reg: '^#?([^\\s#]{1,12})(立绘|原画|全身|展示|动作|待机)$', fnc: 'queryMedia', priority: 70 },
-        { reg: `^#?g(?!(?:${WIKI_FOCUS_PATTERN}))\\s*(\\S+)$`, fnc: 'queryG', priority: 75 },
+        { reg: '^#?([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$', fnc: 'queryMedia', priority: 70 },
+        { reg: '^#?g\\s*(\\S+)$', fnc: 'queryG', priority: 75 },
+        { reg: '^#(?!图鉴|观测枢|wiki|角色|人物|武器|圣遗物|遗物|圣遗|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具|背包)([^\\s#]{1,16})$', fnc: 'queryBare', priority: 78 },
         { reg: shortPattern, fnc: 'queryShort', priority: 80 },
       ],
     })
@@ -269,7 +269,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ['图片和动作', [
         ['胡桃立绘', '全身立绘原图'],
         ['胡桃动作', '待机和技能动图'],
-        ['g薇纳斯', '直接查角色'],
+        ['g薇纳斯', '角色、武器、圣遗物、敌人、食物'],
+        ['#蝶变', '名字完全一致时直接出图'],
         ['#图鉴2', '打开上一次的第 2 条'],
         ['#图鉴视频开', `角色视频当前${on ? '已开启' : '已关闭'}`],
       ]],
@@ -575,9 +576,38 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryG(e) {
     const keyword = String(e.msg || '').replace(/^#?g\s*/, '').trim()
-    if (!keyword || keyword.length > 12 || /帮助|视频|图鉴|目录|列表/.test(keyword)) return false
-    e.msg = `#图鉴 角色 ${keyword}`
-    return this.query(e)
+    if (!keyword || keyword.length > 16 || /帮助|视频|图鉴|目录|列表|更新/.test(keyword)) return false
+    if (findWikiFocus(keyword)) return false
+    const found = await this.openExact(e, keyword)
+    return found ? true : false
+  }
+
+  async queryBare(e) {
+    const keyword = String(e.msg || '').replace(/^#/, '').trim()
+    if (!keyword || keyword.length > 16 || /^\d+$/.test(keyword)) return false
+    const found = await this.openExact(e, keyword)
+    return found ? true : false
+  }
+
+  async openExact(e, keyword, focus = null) {
+    const results = await searchWiki(keyword, { limit: 30 })
+    const exact = results.filter(item => item.score >= 100)
+    if (!exact.length) return false
+    const chosen = this.uniqueHit(exact)
+    if (chosen) {
+      await this.showEntry(e, chosen, '', focus)
+      return true
+    }
+    sessions.set(this.sessionKey(e), { results: exact, keyword, focus: focus?.id || '', time: Date.now() })
+    const view = this.resultListHtml(exact, 1, keyword)
+    await this.replyImage(e, this.wrapHtml({
+      title: `「${keyword}」`,
+      subtitle: '有多个同名词条，发送序号打开',
+      body: view.body,
+      footer: '例如 #图鉴1',
+      extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+    }), `${keyword}有多个同名词条`)
+    return true
   }
 
   async queryFocus(e) {
@@ -588,8 +618,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     try {
       const results = await searchWiki(keyword, { channelId: 25, limit: 8 })
       if (!results.length) {
-        if (await this.offerSuggestions(e, keyword, 25, focus.id)) return true
-        await e.reply(`没有找到角色「${keyword}」。可以换成更完整的名字，例如 #g${focus.name} 胡桃`)
+        await e.reply(`没有找到角色「${keyword}」。`)
         return true
       }
       const chosen = this.uniqueHit(results)
@@ -620,15 +649,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return this.query(e)
   }
 
-  async offerSuggestions(e, keyword, channelId = 0, focus = '') {
-    const suggestions = await suggestWiki(keyword, { channelId, limit: 3 })
-    if (!suggestions.length) return false
-    sessions.set(this.sessionKey(e), { results: suggestions, keyword, focus, suggest: true, time: Date.now() })
-    const lines = suggestions.map((item, index) => `${index + 1}. ${item.name}${item.channelName ? '（' + item.channelName + '）' : ''}`)
-    await e.reply(`没有找到「${keyword}」。是不是要找：\n${lines.join('\n')}\n回复 1 或 #图鉴1 打开，10 分钟内有效。`)
-    return true
-  }
-
   async query(e) {
     const input = String(e.msg || '').replace(/^#?(?:图鉴|观测枢|wiki)\s*/i, '').trim()
     if (!input || /^(帮助|菜单)$/.test(input)) return this.showHelp(e)
@@ -656,8 +676,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
       const results = await searchWiki(parsed.keyword, { channelId: parsed.channel?.id || 0, limit: 20 })
       if (!results.length) {
-        if (await this.offerSuggestions(e, parsed.keyword, parsed.channel?.id || 0)) return true
-        await e.reply(`没有找到「${parsed.keyword}」。可以换成更完整的名字，或加分类，例如 #图鉴 武器 ${parsed.keyword}`)
+        await e.reply(`没有找到「${parsed.keyword}」。`)
         return true
       }
       sessions.set(key, { results, keyword: parsed.keyword, time: Date.now() })
