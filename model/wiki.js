@@ -249,6 +249,7 @@ async function getChannelItems(channelId) {
   const data = await requestJson(`${LIST_BASE}/common/blackboard/${APP_SN}/v1/home/content/list?app_sn=${APP_SN}&channel_id=${channelId}`)
   const items = []
   for (const channel of data?.list || []) {
+    const filters = parseChannelFilters(channel.ch_ext)
     for (const item of channel.list || []) {
       if (!item?.content_id || !item?.title) continue
       items.push({
@@ -259,6 +260,8 @@ async function getChannelItems(channelId) {
         alias: stripHtml(item.alias_name || ''),
         channelId,
         channelName: channel.name || '',
+        filters: parseItemFilters(item.ext),
+        filterSchema: filters,
       })
     }
   }
@@ -403,19 +406,130 @@ export async function suggestWiki(keyword, { channelId = 0, limit = 3 } = {}) {
     .slice(0, limit)
 }
 
-export async function listWikiChannel(channel, page = 1) {
+export const CATALOG_PAGE_SIZE = 24
+
+const FILTER_ALIASES = [
+  ['五星', ['5星']],
+  ['四星', ['4星']],
+  ['三星', ['3星']],
+  ['二星', ['2星']],
+  ['一星', ['1星']],
+  ['单手剑', ['单手']],
+  ['双手剑', ['双手', '大剑', '重剑']],
+  ['长柄武器', ['长柄', '长枪']],
+  ['蒙德城', ['蒙德']],
+  ['璃月港', ['璃月']],
+  ['稻妻城', ['稻妻']],
+  ['须弥城', ['须弥']],
+  ['枫丹廷', ['枫丹']],
+  ['至冬', ['至冬国']],
+  ['始基力 荒', ['始基力荒']],
+  ['始基力 芒', ['始基力芒']],
+]
+
+function parseJsonText(value, fallback) {
+  if (Array.isArray(value) || (value && typeof value === 'object')) return value
+  if (!value) return fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function parseChannelFilters(value) {
+  const ext = parseJsonText(value, [])
+  const raw = (Array.isArray(ext) ? ext : []).find(item => item?.attribute_key === 'filter')?.value
+  const groups = parseJsonText(raw, [])
+  return (Array.isArray(groups) ? groups : [])
+    .map(group => ({
+      label: String(group?.label || '').trim(),
+      options: (group?.children || []).map(child => String(child?.label || '').trim()).filter(Boolean),
+    }))
+    .filter(group => group.label && group.options.length)
+}
+
+function parseItemFilters(value) {
+  const ext = parseJsonText(value, {})
+  const bag = Object.values(ext || {}).map(item => item?.filter?.text).find(Boolean)
+  const tags = parseJsonText(bag, [])
+  const filters = {}
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const text = String(tag || '')
+    const slash = text.indexOf('/')
+    if (slash <= 0) continue
+    const key = text.slice(0, slash).trim()
+    const option = text.slice(slash + 1).trim()
+    if (!key || !option) continue
+    if (!filters[key]) filters[key] = []
+    if (!filters[key].includes(option)) filters[key].push(option)
+  }
+  return filters
+}
+
+function filterWords(option) {
+  const text = String(option || '').trim()
+  const words = new Set([text, text.replace(/\s+/g, '')])
+  for (const [name, aliases] of FILTER_ALIASES) {
+    if (text === name || aliases.includes(text)) {
+      words.add(name)
+      aliases.forEach(alias => words.add(alias))
+    }
+  }
+  return [...words].filter(Boolean).sort((a, b) => b.length - a.length)
+}
+
+function matchFilter(filters, token) {
+  const query = String(token || '').replace(/\s+/g, '')
+  if (!query) return false
+  for (const values of Object.values(filters || {})) {
+    for (const value of values) {
+      if (filterWords(value).some(word => word.replace(/\s+/g, '') === query)) return true
+    }
+  }
+  return false
+}
+
+export async function listWikiChannel(channel, page = 1, filters = []) {
   const items = await getChannelItems(channel.id)
-  const size = 24
-  const totalPage = Math.max(1, Math.ceil(items.length / size))
-  const current = Math.min(Math.max(1, page), totalPage)
+  const wanted = [...new Set((filters || []).map(item => String(item || '').trim()).filter(Boolean))]
+  const matched = wanted.length
+    ? items.filter(item => wanted.every(token => matchFilter(item.filters, token)))
+    : items
+  const size = CATALOG_PAGE_SIZE
+  const totalPage = Math.max(1, Math.ceil(matched.length / size))
+  const current = Math.max(1, page)
   const start = (current - 1) * size
   return {
     channel,
     page: current,
     totalPage,
-    total: items.length,
-    items: items.slice(start, start + size),
+    total: matched.length,
+    filters: wanted,
+    schema: items[0]?.filterSchema || [],
+    items: matched.slice(start, start + size),
   }
+}
+
+export function parseCatalogQuery(input = '') {
+  const text = String(input).replace(/^#?图鉴(?:目录|列表|分类)\s*/, '').trim()
+  const tokens = text.split(/\s+/).filter(Boolean)
+  let channel = null
+  let page = 1
+  const filters = []
+  for (const token of tokens) {
+    if (/^\d+$/.test(token)) {
+      page = Math.max(1, parseInt(token, 10))
+      continue
+    }
+    const matched = findWikiChannel(token)
+    if (matched && !channel) {
+      channel = matched
+      continue
+    }
+    filters.push(token)
+  }
+  return { channel, page, filters }
 }
 
 export function parseWikiQuery(input = '') {

@@ -15,6 +15,7 @@ import {
   findWikiFocus,
   getWikiEntry,
   listWikiChannel,
+  parseCatalogQuery,
   parseWikiQuery,
   searchWiki,
   suggestWiki,
@@ -203,7 +204,7 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?(?:g)?(?:图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
         { reg: '^#?(?:图鉴|观测枢)更新$', fnc: 'updatePlugin', priority: 40 },
         { reg: '^#?图鉴视频(?:\\s*(开|关))?$', fnc: 'toggleVideo' },
-        { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
+        { reg: '^#?图鉴(目录|列表|分类)(?:\\s+.*)?$', fnc: 'showCatalog' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
         { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
         { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
@@ -269,9 +270,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['胡桃立绘', '全身立绘原图'],
         ['胡桃动作', '待机和技能动图'],
         ['g薇纳斯', '直接查角色'],
-        ['#图鉴2', '打开上次第 2 条'],
-        ['胡挑', '打错会问是不是胡桃'],
-        ['#图鉴视频开', `视频当前${on ? '已开启' : '已关闭'}`],
+        ['#图鉴2', '打开上一次的第 2 条'],
+        ['#图鉴视频开', `角色视频当前${on ? '已开启' : '已关闭'}`],
       ]],
       ['其他图鉴', [
         ['#武器 狼的末路', '武器属性和材料'],
@@ -279,7 +279,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['丘丘人敌人', '敌人资料'],
         ['#食物 甜甜花酿鸡', '食谱和效果'],
         ['#材料 霓裳花', '来源和用途'],
-        ['#图鉴目录 武器', '按分类翻页'],
+        ['#图鉴目录 武器', '头像名册，可翻页'],
+        ['#图鉴目录 角色 火 五星', '按元素、地区、星级筛选'],
+        ['#图鉴目录 敌人 BOSS', '按类型筛选敌人'],
       ]],
     ]
     const body = `<div class="help">
@@ -294,7 +296,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         <h2>${title}</h2>
         <div class="grid">${items.map(([cmd, desc]) => `<div class="cell"><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">能对上就直接出图。差一两个字会问你是不是这个，回复序号打开。${version ? ' v' + escapeHtml(version) : ''}</div>
+      <div class="foot">${version ? 'v' + escapeHtml(version) : ''}</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
@@ -331,41 +333,60 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async showCatalog(e) {
-    const matched = String(e.msg || '').match(/^#?图鉴(?:目录|列表|分类)(?:\s+(\S+))?(?:\s+(\d+))?$/)
-    const name = matched?.[1] || ''
-    const page = parseInt(matched?.[2] || '1', 10)
-    if (!name) {
-      const cards = WIKI_CHANNELS.map(channel => `<div class="channel">${escapeHtml(channel.name)}</div>`).join('')
+    const parsed = parseCatalogQuery(String(e.msg || ''))
+    if (!parsed.channel) {
+      const cards = WIKI_CHANNELS.map(channel => {
+        const sample = channel.id === 25
+          ? '#图鉴目录 角色 火 五星'
+          : channel.id === 5
+            ? '#图鉴目录 武器 五星 单手剑'
+            : channel.id === 218
+              ? '#图鉴目录 圣遗物 五星'
+              : channel.id === 6
+                ? '#图鉴目录 敌人 BOSS'
+                : channel.id === 21
+                  ? '#图鉴目录 食物 三星'
+                  : '#图鉴目录 材料 特产'
+        return `<div class="channel"><b>${escapeHtml(channel.name)}</b><span>${escapeHtml(sample)}</span></div>`
+      }).join('')
       await this.replyImage(e, this.wrapHtml({
         title: '图鉴目录',
-        subtitle: '发送 #图鉴目录 分类名',
+        subtitle: '选择分类后渲染头像名册',
         body: `<div class="channels">${cards}</div>`,
-        footer: '例如 #图鉴目录 武器',
-        extraCss: '.channels{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}.channel{padding:18px 8px;text-align:center;background:#f8fafc;border-radius:14px;font-size:18px;font-weight:800;color:#1e293b}',
-      }))
-      return true
-    }
-
-    const channel = WIKI_CHANNELS.find(item => item.name === name || item.aliases.includes(name))
-    if (!channel) {
-      await e.reply('没有这个分类。可选：角色、武器、圣遗物、敌人、食物、材料')
+        footer: '条件可以叠加，例如 #图鉴目录 角色 璃月 冰 法器',
+        extraCss: '.channels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.channel{min-height:78px;padding:14px 16px;background:#f8fafc;border-radius:14px}.channel b{display:block;color:#1e293b;font-size:20px}.channel span{display:block;margin-top:6px;color:#64748b;font-size:13px}',
+      }), '发送 #图鉴目录 角色，或 #图鉴目录 角色 火 五星')
       return true
     }
 
     try {
-      const result = await listWikiChannel(channel, page)
-      const cards = result.items.map((item, index) => {
-        const no = (result.page - 1) * 24 + index + 1
+      const result = await listWikiChannel(parsed.channel, parsed.page, parsed.filters)
+      const label = `${parsed.channel.name}${parsed.filters.length ? ' · ' + parsed.filters.join(' · ') : ''}`
+      if (!result.total) {
+        const hint = result.schema
+          .map(group => `${group.label}：${group.options.slice(0, 8).join('、')}`)
+          .join('\n')
+        await e.reply(`「${label}」没有匹配的词条。\n${hint}`)
+        return true
+      }
+      if (result.page > result.totalPage) {
+        await e.reply(`「${label}」共 ${result.totalPage} 页。发送 #图鉴目录 ${parsed.channel.name}${parsed.filters.length ? ' ' + parsed.filters.join(' ') : ''} ${result.totalPage}`)
+        return true
+      }
+      const cards = result.items.map(item => {
         const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : '<span class="placeholder"></span>'
-        return `<div class="card">${icon}<div><b>${no}. ${escapeHtml(item.name)}</b></div></div>`
+        const tags = Object.values(item.filters || {}).flat().slice(0, 3)
+        return `<div class="card">${icon}<b>${escapeHtml(item.name)}</b><span>${escapeHtml(tags.join(' · '))}</span></div>`
       }).join('')
+      const condition = parsed.filters.length ? parsed.filters.join(' ') : '全部'
+      const again = ['#图鉴目录', parsed.channel.name, ...parsed.filters].join(' ')
       await this.replyImage(e, this.wrapHtml({
-        title: `${channel.name}图鉴`,
-        subtitle: `第 ${result.page}/${result.totalPage} 页，共 ${result.total} 条`,
+        title: `${parsed.channel.name}图鉴`,
+        subtitle: `${condition} · 第 ${result.page}/${result.totalPage} 页 · 共 ${result.total} 条`,
         body: `<div class="grid">${cards}</div>`,
-        footer: result.page < result.totalPage ? `下一页：#图鉴目录 ${channel.name} ${result.page + 1}` : '已是最后一页',
-        extraCss: '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{display:flex;align-items:center;gap:8px;min-height:58px;padding:8px;background:#f8fafc;border-radius:12px}.card img,.placeholder{width:42px;height:42px;border-radius:10px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.card b{font-size:13px;color:#1e293b;line-height:1.35}',
-      }))
+        footer: result.page < result.totalPage ? `下一页：${again} ${result.page + 1}` : '已是最后一页',
+        extraCss: '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:132px;padding:10px 6px;background:#f8fafc;border-radius:14px;text-align:center}.card img,.placeholder{width:72px;height:72px;border-radius:50%;object-fit:cover;background:#e2e8f0}.card b{color:#1e293b;font-size:13px;line-height:1.35}.card span{color:#64748b;font-size:11px;line-height:1.35}',
+      }), `${parsed.channel.name}图鉴，共 ${result.total} 条`)
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
       await e.reply('图鉴目录获取失败，请稍后重试')
