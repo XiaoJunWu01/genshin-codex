@@ -147,53 +147,52 @@ function groupsHtml(groups, total = []) {
   return rows || summary ? `<div class="levels">${rows}${summary}</div>` : ''
 }
 
+const resultCss = '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}.result img,.placeholder{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#f1f5f9;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:15px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px}.result em{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#64748b;font-style:normal;font-size:12px;line-height:1.5}'
+
 const entryCss = `
-.hero{position:relative;display:flex;gap:16px;align-items:center;min-height:168px;margin:-24px -24px 16px;padding:24px;border-radius:18px 18px 0 0;background:
-linear-gradient(135deg,var(--soft),#fff 58%),
-radial-gradient(circle at 92% 18%,var(--accent),transparent 34%)}
-.cover{width:112px;height:112px;object-fit:contain;border-radius:24px;background:
-radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);
-border:4px solid #fff;box-shadow:0 8px 18px rgba(0,0,0,.12);flex-shrink:0}
-.hero h2{color:var(--ink);font-size:34px;line-height:1.05}
-.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
-.facts span{min-width:78px;padding:7px 10px;border-radius:12px;background:#fff;border-top:4px solid var(--accent);box-shadow:0 2px 8px rgba(15,23,42,.06)}
-.facts em{display:block;color:#64748b;font-style:normal;font-size:11px;font-weight:700}
-.facts b{color:var(--ink);font-size:16px}
-.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.tags span{padding:3px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px;font-weight:700}
-.attrs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.attrs div{padding:8px 10px;background:var(--soft);border-radius:12px;border-left:4px solid var(--accent)}
+.hero{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid rgba(15,23,42,.08);border-radius:16px;background:linear-gradient(135deg,#fff,var(--soft))}
+.cover{width:92px;height:92px;object-fit:contain;border-radius:20px;background:radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);border:1px solid rgba(15,23,42,.06);flex-shrink:0}
+.hero h2{color:var(--ink);font-size:30px;line-height:1.1}
+.facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.facts span{min-width:64px;padding:5px 9px;border-radius:10px;background:#fff;border:1px solid rgba(15,23,42,.06);border-top:3px solid var(--accent)}
+.facts em{display:block;color:#64748b;font-style:normal;font-size:11px}
+.facts b{color:var(--ink);font-size:15px}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tags span{padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px}
+.attrs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.attrs div{padding:8px 10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}
 .attrs em{display:block;color:#64748b;font-style:normal;font-size:12px}
-.attrs b{color:var(--ink);font-size:14px}
-section{margin-top:12px;padding:12px 14px;background:var(--soft);border-radius:14px}
-section h3{margin-bottom:6px;padding-left:9px;border-left:4px solid var(--accent);color:var(--ink);font-size:16px}
-section p{color:#334155;font-size:14px;line-height:1.65;word-break:break-word}
-.levels{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.level{padding:8px;border-radius:12px;background:rgba(255,255,255,.88)}
+.attrs b{color:var(--ink);font-size:14px;line-height:1.45}
+section{margin-top:10px;padding:12px;border:1px solid rgba(15,23,42,.08);border-radius:14px;background:#fff}
+section h3{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--ink);font-size:15px}
+section h3::before{content:\"\";width:4px;height:14px;border-radius:4px;background:var(--accent)}
+section p{color:#334155;font-size:14px;line-height:1.7;word-break:break-word}
+.levels{display:flex;flex-direction:column;gap:6px}
+.level{padding:8px;border-radius:10px;background:var(--soft)}
 .level>b{display:block;margin-bottom:6px;color:var(--ink);font-size:13px}
 .level>div{display:flex;flex-wrap:wrap;gap:6px}
-.mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:3px 7px 3px 3px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.06)}
-.mat img{width:26px;height:26px;object-fit:contain;border-radius:50%;background:var(--soft)}
+.mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:2px 8px 2px 2px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.mat img{width:24px;height:24px;object-fit:contain;border-radius:50%;background:var(--soft)}
 .mat em{color:#334155;font-style:normal;font-size:12px}
 .mat b{color:var(--accent);font-size:12px}
 .level small{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.5}
-.total{background:#fff}
-.equips{display:flex;flex-direction:column;gap:8px;margin-top:8px}
-.group{margin-top:4px;color:var(--accent);font-size:13px;font-weight:800}
-.equip{display:flex;align-items:flex-start;gap:10px;padding:8px;border-radius:12px;background:rgba(255,255,255,.9)}
-.equip .icons{display:flex;gap:4px;flex-shrink:0}
-.equip .icons img,.equip>img,.equip>.placeholder{width:54px;height:54px;object-fit:contain;border-radius:12px;background:var(--soft)}
-.equip b{display:block;color:var(--ink);font-size:14px;line-height:1.4}
-.equip p{margin-top:3px;color:#475569;font-size:12px;line-height:1.7}
-.more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:14px}
+.total{background:#fff;border:1px dashed var(--accent)}
+.equips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.group{grid-column:1/-1;margin-top:2px;color:var(--accent);font-size:13px;font-weight:800}
+.equip{display:flex;align-items:flex-start;gap:8px;min-height:72px;padding:8px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.equip .icons{display:flex;gap:3px;flex-shrink:0}
+.equip .icons img,.equip>img,.equip>.placeholder{width:46px;height:46px;object-fit:contain;border-radius:10px;background:#fff}
+.equip b{display:block;color:var(--ink);font-size:13px;line-height:1.35}
+.equip p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#475569;font-size:12px;line-height:1.55}
+.more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding:10px;border-radius:12px;background:var(--soft)}
 .more em{color:#64748b;font-style:normal;font-size:12px}
-.more span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:12px;font-weight:700}
-.gallery{display:flex;flex-direction:column;gap:12px;margin-top:8px}
-.shot{padding:8px;border-radius:14px;background:rgba(255,255,255,.9)}
-.shot img{display:block;width:100%;max-height:920px;object-fit:contain;border-radius:10px;background:#fff}
+.more span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:12px}
+.gallery{display:flex;flex-direction:column;gap:10px}
+.shot{padding:8px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.shot img{display:block;width:100%;max-height:760px;object-fit:contain;border-radius:10px;background:#fff}
 .shot b{display:block;margin-top:6px;color:var(--ink);font-size:13px;text-align:center}
-.motions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
-.motions .shot img{max-height:280px;background:var(--soft)}
+.motions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.motions .shot img{max-height:240px}
 `
 
 export default class WikiPlugin extends plugin {
@@ -245,11 +244,11 @@ export default class WikiPlugin extends plugin {
     return `<!DOCTYPE html><html><head><meta charset="UTF-8"><style>
 *{margin:0;padding:0;box-sizing:border-box}html,body{overflow:hidden}
 body{display:inline-block;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;background:transparent}
-.page{display:inline-block;${pageBg}padding:20px}
-.container{--accent:${palette.color};--soft:${palette.soft};--ink:${palette.ink};width:760px;background:rgba(255,255,255,.94);border-radius:18px;box-shadow:0 8px 28px rgba(0,0,0,.18);padding:24px}
-.header{display:${theme ? 'none' : 'block'};text-align:center;margin-bottom:18px;padding-bottom:12px;border-bottom:2px solid rgba(226,232,240,.75)}
-.header h1{font-size:24px;color:#1e293b}.subtitle{margin-top:4px;color:#64748b;font-size:13px}
-.footer{margin-top:14px;padding-top:10px;border-top:1px solid rgba(226,232,240,.75);text-align:center;color:#64748b;font-size:13px;line-height:1.7}
+.page{display:inline-block;${pageBg}padding:18px}
+.container{--accent:${palette.color};--soft:${palette.soft};--ink:${palette.ink};width:760px;padding:16px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.7);border-radius:22px;box-shadow:0 10px 30px rgba(15,23,42,.16)}
+.header{display:${theme ? 'none' : 'block'};margin-bottom:12px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,var(--soft),#fff);border:1px solid rgba(15,23,42,.06)}
+.header h1{font-size:22px;color:var(--ink);line-height:1.2}.subtitle{margin-top:3px;color:#64748b;font-size:13px}
+.footer{margin-top:12px;padding:8px 12px;border-radius:12px;background:var(--soft);text-align:center;color:#64748b;font-size:12px;line-height:1.6}
 ${extraCss || ''}
 </style></head><body><div class="page"><div class="container">
 <div class="header"><h1>${title}</h1><div class="subtitle">${subtitle || ''}</div></div>
@@ -364,9 +363,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await this.replyImage(e, this.wrapHtml({
         title: '图鉴目录',
         subtitle: '先选分类，再叠加筛选',
-        body,
+        body: `<div class="groups">${body}</div>`,
         footer: '#图鉴目录 角色 火 五星 · #图鉴日历 · #图鉴今天',
-        extraCss: 'section{margin-bottom:14px}section h3{margin-bottom:8px;color:#334155;font-size:15px}.channels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.channel{min-height:64px;padding:10px 12px;background:#f8fafc;border-radius:12px}.channel b{display:block;color:#1e293b;font-size:16px}.channel span{display:block;margin-top:4px;color:#64748b;font-size:12px}',
+        extraCss: '.groups{display:flex;flex-direction:column;gap:10px}section{padding:12px;border:1px solid rgba(15,23,42,.07);border-radius:14px;background:#fff}section h3{margin-bottom:8px;color:#334155;font-size:14px}.channels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.channel{min-height:58px;padding:9px 10px;border:1px solid rgba(15,23,42,.06);border-radius:12px;background:#f8fafc;border-top:3px solid var(--accent)}.channel b{display:block;color:#1e293b;font-size:15px}.channel span{display:block;margin-top:3px;color:#64748b;font-size:12px}',
       }), '发送 #图鉴目录 角色，或 #图鉴目录 角色 火 五星')
       return true
     }
@@ -397,7 +396,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         subtitle: `${condition} · 第 ${result.page}/${result.totalPage} 页 · 共 ${result.total} 条`,
         body: `<div class="grid">${cards}</div>`,
         footer: result.page < result.totalPage ? `下一页：${again} ${result.page + 1}` : '已是最后一页',
-        extraCss: '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}.card{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:132px;padding:10px 6px;background:#f8fafc;border-radius:14px;text-align:center}.card img,.placeholder{width:72px;height:72px;border-radius:50%;object-fit:cover;background:#e2e8f0}.card b{color:#1e293b;font-size:13px;line-height:1.35}.card span{color:#64748b;font-size:11px;line-height:1.35}',
+        extraCss: '.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.card{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:124px;padding:10px 6px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:14px;text-align:center}.card img,.placeholder{width:64px;height:64px;border-radius:50%;object-fit:cover;background:#f1f5f9;border:1px solid rgba(15,23,42,.05)}.card b{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:#1e293b;font-size:13px;line-height:1.3}.card span{display:-webkit-box;-webkit-line-clamp:1;-webkit-box-orient:vertical;overflow:hidden;color:#64748b;font-size:11px}',
       }), `${parsed.channel.name}图鉴，共 ${result.total} 条`)
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
@@ -417,18 +416,18 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           return `<span>${icon}${escapeHtml(item.name)}</span>`
         }).join('')
         : '<em>无</em>'
-      const body = rows.map(row => `<section>
+      const body = `<div class="days">${rows.map(row => `<section>
         <h3><b>${escapeHtml(row.label)}</b><span>${escapeHtml(row.date)} ${escapeHtml(row.week)}</span></h3>
         <div class="line"><em>生日</em><div>${chips(row.birthdays)}</div></div>
-        <div class="line"><em>天赋</em><div>${row.open ? '<em>全部开放</em>' : chips(row.talent)}</div></div>
-        <div class="line"><em>武器</em><div>${row.open ? '<em>全部开放</em>' : chips(row.weapon)}</div></div>
-      </section>`).join('')
+        <div class="line"><em>天赋</em><div>${row.open ? '<i>全部开放</i>' : chips(row.talent)}</div></div>
+        <div class="line"><em>武器</em><div>${row.open ? '<i>全部开放</i>' : chips(row.weapon)}</div></div>
+      </section>`).join('')}</div>`
       await this.replyImage(e, this.wrapHtml({
         title: todayOnly ? '今日图鉴' : '图鉴日历',
         subtitle: '生日、天赋本和武器本',
         body,
         footer: '卡池和活动时间不在观测枢日历里，这里不显示',
-        extraCss: 'section{margin-bottom:12px;padding:12px 14px;background:#f8fafc;border-radius:14px}h3{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}h3 b{color:#1e293b;font-size:18px}h3 span{color:#64748b;font-size:13px}.line{display:flex;gap:8px;margin-top:6px}.line>em{width:36px;flex-shrink:0;color:#64748b;font-style:normal;font-size:13px;line-height:28px}.line>div{display:flex;flex-wrap:wrap;gap:6px}.line span{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 3px;border-radius:999px;background:#fff;color:#1e293b;font-size:13px}.line img{width:22px;height:22px;border-radius:50%;object-fit:cover}.line em{color:#94a3b8;font-style:normal}',
+        extraCss: '.days{display:flex;flex-direction:column;gap:10px}section{padding:12px;border:1px solid rgba(15,23,42,.07);border-radius:14px;background:#fff}h3{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(15,23,42,.06)}h3 b{color:#1e293b;font-size:17px}h3 span{color:#64748b;font-size:12px}.line{display:flex;gap:8px;margin-top:7px}.line>em{width:32px;flex-shrink:0;color:#64748b;font-style:normal;font-size:12px;line-height:26px}.line>div{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:1}.line span{display:flex;align-items:center;gap:5px;min-width:0;padding:2px 8px 2px 2px;border:1px solid rgba(15,23,42,.06);border-radius:999px;background:#f8fafc;color:#1e293b;font-size:12px}.line img{width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0}.line i{grid-column:1/-1;color:#94a3b8;font-style:normal;font-size:13px;line-height:26px}',
       }), '图鉴日历')
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
@@ -647,7 +646,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       subtitle: '有多个同名词条，发送序号打开',
       body: view.body,
       footer: '例如 #图鉴1',
-      extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+      extraCss: resultCss,
     }), `${keyword}有多个同名词条`)
     return true
   }
@@ -675,7 +674,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         subtitle: `选一个再看${focus.name}`,
         body: view.body,
         footer: `发送 #图鉴序号 查看${focus.name}，例如 #图鉴1`,
-        extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+        extraCss: resultCss,
       }))
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
@@ -736,7 +735,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         subtitle: parsed.channel ? `分类：${parsed.channel.name}` : '发送序号查看详情',
         body: view.body,
         footer: view.footer,
-        extraCss: '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#f8fafc;border-radius:12px}.result img,.placeholder{width:52px;height:52px;border-radius:12px;object-fit:cover;background:#e2e8f0;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:16px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:#dbeafe;color:#1d4ed8;font-size:12px}.result em{display:block;margin-top:3px;color:#64748b;font-style:normal;font-size:12px}',
+        extraCss: resultCss,
       }))
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
