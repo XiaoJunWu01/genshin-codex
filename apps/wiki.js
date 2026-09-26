@@ -410,7 +410,22 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const days = todayOnly ? 1 : Math.min(14, parseInt(String(e.msg || '').match(/(\d+)\s*$/)?.[1] || '7', 10))
     try {
       const { rows } = await getWikiCalendar(days)
-      const chips = items => items.length
+      const seriesOf = name => String(name || '').split(/的|之/)[0].replace(/[「」]/g, '')
+      const groups = items => {
+        const map = new Map()
+        for (const item of items) {
+          const key = seriesOf(item.name)
+          if (!map.has(key)) map.set(key, { name: key, icon: item.icon || '', grades: [] })
+          map.get(key).grades.push(item)
+        }
+        return [...map.values()]
+      }
+      const books = items => groups(items).map(group => {
+        const icon = group.icon ? `<img src="${escapeHtml(group.icon)}" alt="">` : ''
+        const grades = group.grades.map(item => `<i>${escapeHtml(item.name)}</i>`).join('')
+        return `<div class="book">${icon}<div><b>${escapeHtml(group.name)}</b>${grades}</div></div>`
+      }).join('')
+      const birthdays = items => items.length
         ? items.map(item => {
           const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : ''
           return `<span>${icon}${escapeHtml(item.name)}</span>`
@@ -418,16 +433,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         : '<em>无</em>'
       const body = `<div class="days">${rows.map(row => `<section>
         <h3><b>${escapeHtml(row.label)}</b><span>${escapeHtml(row.date)} ${escapeHtml(row.week)}</span></h3>
-        <div class="line"><em>生日</em><div>${chips(row.birthdays)}</div></div>
-        <div class="line"><em>天赋</em><div>${row.open ? '<i>全部开放</i>' : chips(row.talent)}</div></div>
-        <div class="line"><em>武器</em><div>${row.open ? '<i>全部开放</i>' : chips(row.weapon)}</div></div>
+        <div class="line birth"><em>生日</em><div>${birthdays(row.birthdays)}</div></div>
+        <div class="line"><em>天赋</em><div>${row.open ? '<i class="all">全部开放</i>' : books(row.talent)}</div></div>
+        <div class="line"><em>武器</em><div>${row.open ? '<i class="all">全部开放</i>' : books(row.weapon)}</div></div>
       </section>`).join('')}</div>`
       await this.replyImage(e, this.wrapHtml({
         title: todayOnly ? '今日图鉴' : '图鉴日历',
         subtitle: '生日、天赋本和武器本',
         body,
         footer: '卡池和活动时间不在观测枢日历里，这里不显示',
-        extraCss: '.days{display:flex;flex-direction:column;gap:10px}section{padding:12px;border:1px solid rgba(15,23,42,.07);border-radius:14px;background:#fff}h3{display:flex;align-items:baseline;gap:8px;margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid rgba(15,23,42,.06)}h3 b{color:#1e293b;font-size:17px}h3 span{color:#64748b;font-size:12px}.line{display:flex;gap:8px;margin-top:7px}.line>em{width:32px;flex-shrink:0;color:#64748b;font-style:normal;font-size:12px;line-height:26px}.line>div{display:grid;grid-template-columns:1fr 1fr;gap:5px;flex:1}.line span{display:flex;align-items:center;gap:5px;min-width:0;padding:2px 8px 2px 2px;border:1px solid rgba(15,23,42,.06);border-radius:999px;background:#f8fafc;color:#1e293b;font-size:12px}.line img{width:22px;height:22px;border-radius:50%;object-fit:cover;flex-shrink:0}.line i{grid-column:1/-1;color:#94a3b8;font-style:normal;font-size:13px;line-height:26px}',
+        extraCss: '.days{display:flex;flex-direction:column;gap:12px}section{padding:14px;border:1px solid rgba(15,23,42,.07);border-radius:16px;background:#fff}h3{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:10px;padding-bottom:8px;border-bottom:1px solid rgba(15,23,42,.06)}h3 b{color:#1e293b;font-size:18px}h3 span{color:#64748b;font-size:13px}.line{display:flex;gap:10px;margin-top:10px}.line>em{width:34px;flex-shrink:0;padding-top:8px;color:#64748b;font-style:normal;font-size:13px}.line>div{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;flex:1}.book{display:flex;gap:8px;min-width:0;padding:8px;border:1px solid rgba(15,23,42,.06);border-radius:12px;background:#f8fafc}.book img{width:36px;height:36px;border-radius:8px;object-fit:cover;flex-shrink:0}.book b{display:block;color:#1e293b;font-size:14px;line-height:1.3}.book i{display:block;margin-top:2px;color:#64748b;font-style:normal;font-size:11px;line-height:1.35}.birth>div{display:flex;flex-wrap:wrap;gap:6px}.birth span{display:flex;align-items:center;gap:6px;padding:3px 10px 3px 3px;border-radius:999px;background:#f8fafc;color:#1e293b;font-size:13px}.birth img{width:24px;height:24px;border-radius:50%;object-fit:cover}.all{grid-column:1/-1;align-self:center;color:#94a3b8;font-style:normal;font-size:14px}.birth em{padding-top:4px}',
       }), '图鉴日历')
     } catch (err) {
       logger.error('[观测枢图鉴]', err)

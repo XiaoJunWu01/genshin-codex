@@ -881,7 +881,13 @@ function parseComponent(component, moduleName) {
     if (video) return { title: title || '角色视频', lines: [], videos: [video] }
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
   }
-  if (['role_voice', 'strategy', 'business_card', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
+  if (id === 'business_card') {
+    const images = [data.long_img, data.card_img]
+      .filter(src => src && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(src))
+      .map((src, index) => ({ name: index ? '名片' : '获取界面', src, motion: false }))
+    return images.length ? { title: '名片', lines: [], images, focus: 'portrait' } : null
+  }
+  if (['role_voice', 'strategy', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
     return null
   }
   const video = videoFromHtml(data?.rich_text)
@@ -1020,7 +1026,7 @@ export function formatWikiEntry(page) {
       const hasContent = parsed.lines?.some(Boolean) || parsed.groups?.length || parsed.cards?.length || parsed.images?.length || parsed.videos?.length || parsed.portraits?.length
       if (!hasContent) continue
       const focus = parsed.focus || (parsed.videos?.length ? 'video' : focusOf(parsed.title, parsed.images || []))
-      if (focus === 'portrait') parsed.images = (parsed.images || []).map(item => ({ ...item, name: '' }))
+      if (focus === 'portrait' && parsed.title !== '名片') parsed.images = (parsed.images || []).map(item => ({ ...item, name: '' }))
       pending.push({ ...parsed, focus })
     }
   }
