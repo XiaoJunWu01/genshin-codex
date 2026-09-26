@@ -514,7 +514,7 @@ export async function getWikiCalendar(days = 7) {
 }
 
 export function parseCatalogQuery(input = '') {
-  const text = String(input).replace(/^#?图鉴(?:目录|列表|分类)\s*/, '').trim()
+  const text = String(input).replace(/^#?g?图鉴(?:目录|列表|分类)\s*/, '').trim()
   const tokens = text.split(/\s+/).filter(Boolean)
   let channel = null
   let page = 1

@@ -29,7 +29,9 @@ const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a
 const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flatMap(channel => channel.aliases)]
   .sort((a, b) => b.length - a.length)
   .join('|')
-const shortPattern = `^(?:#?g)?(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
+// # 和 g 两种前缀都能进入全部指令，空格可有可无。
+const lead = '#?g?'
+const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -203,18 +205,18 @@ export default class WikiPlugin extends plugin {
       event: 'message',
       priority: 500,
       rule: [
-        { reg: '^#?(?:g)?(?:图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
-        { reg: '^#?(?:图鉴|观测枢)更新$', fnc: 'updatePlugin', priority: 40 },
-        { reg: '^#?图鉴视频(?:\\s*(开|关))?$', fnc: 'toggleVideo' },
-        { reg: '^#?图鉴(目录|列表|分类)(?:\\s+.*)?$', fnc: 'showCatalog' },
-        { reg: '^#?图鉴(日历|今天)(?:\\s+\\d+)?$', fnc: 'showCalendar' },
-        { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
-        { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
-        { reg: `^#(${channelPattern})\\s*(\\S+)$`, fnc: 'queryAlias', priority: 50 },
-        { reg: '^#?([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$', fnc: 'queryMedia', priority: 70 },
+        { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
+        { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
+        { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo' },
+        { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
+        { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
+        { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
+        { reg: `^${lead}(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
+        { reg: `^${lead}(${channelPattern})\\s*(\\S+)$`, fnc: 'queryAlias', priority: 50 },
+        { reg: `^${lead}([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$`, fnc: 'queryMedia', priority: 70 },
+        { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S+)$', fnc: 'queryG', priority: 75 },
         { reg: `^#(?!${reserved})([^\\s#]{1,16})$`, fnc: 'queryBare', priority: 78 },
-        { reg: shortPattern, fnc: 'queryShort', priority: 80 },
       ],
     })
   }
@@ -262,59 +264,75 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const version = pluginVersion()
     const bg = getBackgroundImageUrl()
     const groups = [
-      ['角色资料', [
-        ['#角色 胡桃', '角色总览'],
-        ['#g天赋 胡桃', '天赋和升级材料'],
-        ['#g命座 胡桃', '六条命之座'],
-        ['#g突破 胡桃', '突破材料'],
-        ['#g故事 胡桃', '故事和配音'],
-        ['#g资料 胡桃', '生日、称号、所属'],
+      ['查询', [
+        ['#角色 胡桃', '角色资料、天赋、命座和突破', '角'],
+        ['g薇纳斯', '名字一致时直接出图', '查'],
+        ['#蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
+        ['胡桃立绘', '全身立绘原图', '绘'],
+        ['胡桃动作', '待机和技能动图', '动'],
+        ['#图鉴 银釭', '按关键字搜索全部词条', '搜'],
       ]],
-      ['图片和动作', [
-        ['胡桃立绘', '全身立绘原图'],
-        ['胡桃动作', '待机和技能动图'],
-        ['g薇纳斯', '角色、武器、圣遗物、敌人、食物'],
-        ['#蝶变', '名字完全一致时直接出图'],
-        ['#图鉴2', '打开上一次的第 2 条'],
-        ['#图鉴视频开', `角色视频当前${on ? '已开启' : '已关闭'}`],
+      ['角色分项', [
+        ['#g天赋 胡桃', '天赋全文和升级材料', '天'],
+        ['#g命座 胡桃', '六条命之座', '命'],
+        ['#g突破 胡桃', '突破材料和满级合计', '突'],
+        ['#g故事 胡桃', '角色故事和配音', '故'],
+        ['#g资料 胡桃', '生日、称号和所属', '档'],
+        ['#图鉴2', '打开上一次结果的第 2 条', '页'],
       ]],
-      ['其他图鉴', [
-        ['#武器 狼的末路', '武器属性和材料'],
-        ['#圣遗物 饰金', '套装和推荐角色'],
-        ['#敌人 丘丘人', '敌人资料'],
-        ['#动物 虹晶星花鱼', '动物、书籍、秘境'],
-        ['#成就 无束的残月', '成就、任务、委托'],
-        ['#名片 原神·印象', '名片、头像、装扮'],
+      ['养成与世界', [
+        ['#武器 狼的末路', '武器属性和突破材料', '武'],
+        ['#圣遗物 饰金', '套装效果和推荐角色', '圣'],
+        ['#敌人 丘丘人', '敌人资料', '敌'],
+        ['#食物 甜甜花酿鸡', '食谱材料和食用效果', '食'],
+        ['#材料 霓裳花', '材料来源和用途', '材'],
+        ['#动物 虹晶星花鱼', '动物和生物', '兽'],
       ]],
-      ['目录和日历', [
-        ['#图鉴目录', '全部分类'],
-        ['#图鉴目录 角色 火 五星', '元素、地区、星级、武器'],
-        ['#图鉴目录 深渊', '深渊、剧诗、危战'],
-        ['#图鉴日历', '未来 7 天生日和材料'],
-        ['#图鉴今天', '只看今天'],
-        ['#图鉴日历 3', '自定义天数，最多 14 天'],
+      ['内容与终局', [
+        ['#成就 无束的残月', '成就达成条件', '成'],
+        ['#任务 至冬宫的来信', '魔神、传说和世界任务', '任'],
+        ['#委托 兽内不和', '冒险家协会每日委托', '委'],
+        ['#秘境 荒坠的圣迹', '秘境和洞天', '境'],
+        ['#深渊 深境螺旋第8层', '深渊、剧诗和危战', '渊'],
+        ['#行动牌 七循之理', '七圣召唤卡牌', '牌'],
+      ]],
+      ['收集与装扮', [
+        ['#名片 原神·印象', '名片原图', '片'],
+        ['#头像 锋锐', '头像', '像'],
+        ['#装扮 名字', '装扮和幻形', '饰'],
+        ['#灰眸 标识', '灰眸和组织', '眸'],
+        ['#NPC 叶尔莫莱', 'NPC 和商店', '人'],
+        ['#活动 名字', '活动和供奉', '活'],
+      ]],
+      ['目录、日历和设置', [
+        ['#图鉴目录', '全部分类和筛选', '目'],
+        ['#图鉴目录 角色 火 五星', '元素、地区、星级、武器', '筛'],
+        ['#图鉴日历', '未来 7 天生日和材料', '历'],
+        ['#图鉴今天', '只看今天', '今'],
+        ['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'],
+        ['#图鉴更新', '主人更新插件', '新'],
       ]],
     ]
     const body = `<div class="help">
       <div class="mast">
         <div>
           <h1>观测枢图鉴</h1>
-          <p>Yunzai · 米游社观测枢</p>
+          <p>原神图鉴 · 米游社观测枢</p>
         </div>
-        <b>miHoYo</b>
+        <b>${version ? 'v' + escapeHtml(version) : '图鉴'}</b>
       </div>
       ${groups.map(([title, items]) => `<section>
         <h2>${title}</h2>
-        <div class="grid">${items.map(([cmd, desc]) => `<div class="cell"><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div>`).join('')}</div>
+        <div class="grid">${items.map(([cmd, desc, mark]) => `<div class="cell"><i>${mark}</i><div><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">${version ? 'v' + escapeHtml(version) : ''}</div>
+      <div class="foot">每条指令都可以用 # 或 g 开头，空格可有可无</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
       body,
       footer: '',
-      extraCss: `body{background:#d7e3ef url("${bg}") center/cover no-repeat}.page{background:transparent;padding:28px}.container{width:860px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column;gap:14px}.mast{display:flex;align-items:flex-end;justify-content:space-between;padding:8px 8px 2px}.mast h1{color:#fff;font-size:46px;line-height:1;letter-spacing:.04em;text-shadow:0 6px 18px rgba(15,23,42,.45)}.mast p{margin-top:8px;color:rgba(255,255,255,.86);font-size:15px;letter-spacing:.08em}.mast b{padding:7px 12px;border:1px solid rgba(255,255,255,.45);border-radius:12px;background:rgba(255,255,255,.18);color:#fff;font-size:14px;letter-spacing:.14em;backdrop-filter:blur(12px)}section{padding:16px;border:1px solid rgba(255,255,255,.38);border-radius:18px;background:rgba(17,24,39,.46);box-shadow:0 10px 28px rgba(15,23,42,.18);backdrop-filter:blur(16px)}section h2{margin-bottom:10px;color:#fff;font-size:16px}section .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.cell{min-height:62px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.10)}.cell b{display:block;color:#f8fafc;font-size:14px;line-height:1.35}.cell span{display:block;margin-top:3px;color:rgba(226,232,240,.78);font-size:12px;line-height:1.4}.foot{color:rgba(255,255,255,.9);font-size:13px;text-align:center;text-shadow:0 2px 8px rgba(15,23,42,.45)}`,
-    }), '发送 #角色 胡桃，或 胡桃立绘')
+      extraCss: `body{background:#d7e3ef url("${bg}") center/cover no-repeat}.page{background:transparent;padding:28px}.container{width:900px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column;gap:14px}.mast{display:flex;align-items:flex-end;justify-content:space-between;padding:8px 8px 2px}.mast h1{color:#fff;font-size:46px;line-height:1;letter-spacing:.04em;text-shadow:0 6px 18px rgba(15,23,42,.45)}.mast p{margin-top:8px;color:rgba(255,255,255,.92);font-size:15px;letter-spacing:.08em;text-shadow:0 2px 8px rgba(15,23,42,.45)}.mast b{padding:7px 12px;border:1px solid rgba(255,255,255,.5);border-radius:12px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;letter-spacing:.08em;backdrop-filter:blur(8px)}section{padding:16px;border:1px solid rgba(255,255,255,.34);border-radius:18px;background:rgba(17,24,39,.30);box-shadow:0 10px 28px rgba(15,23,42,.12);backdrop-filter:blur(8px)}section h2{margin-bottom:10px;color:#fff;font-size:16px;text-shadow:0 2px 8px rgba(15,23,42,.4)}section .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.cell{display:flex;align-items:flex-start;gap:8px;min-height:62px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.08)}.cell i{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-style:normal;font-size:13px;flex-shrink:0}.cell b{display:block;color:#fff;font-size:14px;line-height:1.35;text-shadow:0 1px 4px rgba(15,23,42,.4)}.cell span{display:block;margin-top:3px;color:rgba(241,245,249,.86);font-size:12px;line-height:1.4}.foot{color:rgba(255,255,255,.92);font-size:13px;text-align:center;text-shadow:0 2px 8px rgba(15,23,42,.45)}`,
+    }), '发送 #图鉴帮助 查看全部指令')
     return true
   }
 
@@ -356,7 +374,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ]
       const body = groups.map(([title, ids]) => {
         const cards = ids.map(id => WIKI_CHANNELS.find(channel => channel.id === id)).filter(Boolean)
-          .map(channel => `<div class="channel"><b>${escapeHtml(channel.name)}</b><span>#${escapeHtml(channel.aliases[0])} 名字</span></div>`)
+          .map(channel => `<div class="channel"><i>${escapeHtml(channel.name.slice(0, 1))}</i><div><b>${escapeHtml(channel.name)}</b><span>#${escapeHtml(channel.aliases[0])} 名字</span></div></div>`)
           .join('')
         return `<section><h3>${title}</h3><div class="channels">${cards}</div></section>`
       }).join('')
@@ -365,7 +383,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         subtitle: '先选分类，再叠加筛选',
         body: `<div class="groups">${body}</div>`,
         footer: '#图鉴目录 角色 火 五星 · #图鉴日历 · #图鉴今天',
-        extraCss: '.groups{display:flex;flex-direction:column;gap:10px}section{padding:12px;border:1px solid rgba(15,23,42,.07);border-radius:14px;background:#fff}section h3{margin-bottom:8px;color:#334155;font-size:14px}.channels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.channel{min-height:58px;padding:9px 10px;border:1px solid rgba(15,23,42,.06);border-radius:12px;background:#f8fafc;border-top:3px solid var(--accent)}.channel b{display:block;color:#1e293b;font-size:15px}.channel span{display:block;margin-top:3px;color:#64748b;font-size:12px}',
+        extraCss: '.groups{display:flex;flex-direction:column;gap:10px}section{padding:12px;border:1px solid rgba(15,23,42,.07);border-radius:14px;background:#fff}section h3{margin-bottom:8px;color:#334155;font-size:14px}.channels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.channel{display:flex;align-items:center;gap:8px;min-height:58px;padding:9px 10px;border:1px solid rgba(15,23,42,.06);border-radius:12px;background:#f8fafc}.channel i{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;background:var(--soft);color:var(--accent);font-style:normal;font-size:14px;font-weight:800;flex-shrink:0}.channel b{display:block;color:#1e293b;font-size:15px}.channel span{display:block;margin-top:2px;color:#64748b;font-size:12px}',
       }), '发送 #图鉴目录 角色，或 #图鉴目录 角色 火 五星')
       return true
     }
@@ -540,7 +558,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async toggleVideo(e) {
-    const matched = String(e.msg || '').match(/^#?图鉴视频(?:\s*(开|关))?$/)
+    const matched = String(e.msg || '').match(new RegExp(`^${lead}图鉴视频(?:\\s*(开|关))?$`))
     const key = this.sessionKey(e)
     const next = matched?.[1] ? matched[1] === '开' : !this.videoOn(e)
     videoEnabled.set(key, next)
@@ -622,7 +640,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryMedia(e) {
-    const matched = String(e.msg || '').match(/^#?([^\s#]{1,12})(立绘|原画|全身|展示|动作|待机)$/)
+    const matched = String(e.msg || '').match(new RegExp(`^${lead}([^\\s#]{1,12})(立绘|原画|全身|展示|动作|待机)$`))
     const focus = findWikiFocus(matched?.[2])
     const keyword = matched?.[1] || ''
     if (!focus || !keyword || /^(图鉴|观测枢|wiki|角色|武器)$/.test(keyword)) return false
@@ -667,7 +685,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryFocus(e) {
-    const matched = String(e.msg || '').match(new RegExp(`^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`))
+    const matched = String(e.msg || '').match(new RegExp(`^${lead}(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`))
     const focus = findWikiFocus(matched?.[1])
     const keyword = matched?.[2] || ''
     if (!focus || !keyword) return false
@@ -699,14 +717,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryAlias(e) {
-    const matched = String(e.msg || '').match(new RegExp(`^#(${channelPattern})\\s*(\\S+)$`))
+    const matched = String(e.msg || '').match(new RegExp(`^${lead}(${channelPattern})\\s*(\\S+)$`))
     if (!matched) return false
     e.msg = `#图鉴 ${matched[1]} ${matched[2]}`
     return this.query(e)
   }
 
   async query(e) {
-    const input = String(e.msg || '').replace(/^#?(?:图鉴|观测枢|wiki)\s*/i, '').trim()
+    const input = String(e.msg || '').replace(/^#?g?(?:图鉴|观测枢|wiki)\s*/i, '').trim()
     if (!input || /^(帮助|菜单)$/.test(input)) return this.showHelp(e)
     const parsed = parseWikiQuery(input)
     const key = this.sessionKey(e)
