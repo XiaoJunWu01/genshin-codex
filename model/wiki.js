@@ -22,7 +22,29 @@ export const WIKI_CHANNELS = [
   { id: 218, name: '圣遗物', aliases: ['圣遗物', '遗物', '圣遗'] },
   { id: 6, name: '敌人', aliases: ['敌人', '怪物', '魔物'] },
   { id: 21, name: '食物', aliases: ['食物', '料理', '食谱'] },
-  { id: 13, name: '背包', aliases: ['材料', '素材', '道具', '背包'] },
+  { id: 13, name: '背包', aliases: ['材料', '素材', '道具', '背包'], heavy: true },
+  { id: 278, name: '灰眸', aliases: ['灰眸'] },
+  { id: 255, name: '组织', aliases: ['组织', '势力'] },
+  { id: 252, name: '成就', aliases: ['成就'], heavy: true },
+  { id: 43, name: '任务', aliases: ['任务'], heavy: true },
+  { id: 49, name: '动物', aliases: ['动物', '生物'] },
+  { id: 68, name: '书籍', aliases: ['书籍', '书'] },
+  { id: 55, name: '冒险家协会', aliases: ['冒险家协会', '协会', '每日委托', '委托'] },
+  { id: 20, name: 'NPC', aliases: ['NPC', '商店', 'npc'], heavy: true },
+  { id: 54, name: '秘境', aliases: ['秘境'] },
+  { id: 65, name: '深境螺旋', aliases: ['深境螺旋', '深渊', '螺旋'] },
+  { id: 249, name: '幻想真境剧诗', aliases: ['幻想真境剧诗', '剧诗'] },
+  { id: 275, name: '幽境危战', aliases: ['幽境危战', '危战'] },
+  { id: 109, name: '名片', aliases: ['名片'] },
+  { id: 244, name: '头像', aliases: ['头像'] },
+  { id: 233, name: '角色牌', aliases: ['角色牌'] },
+  { id: 234, name: '行动牌', aliases: ['行动牌', '七圣召唤', '七圣'] },
+  { id: 235, name: '魔物牌', aliases: ['魔物牌'] },
+  { id: 130, name: '洞天', aliases: ['洞天', '尘歌壶', '家具'], heavy: true },
+  { id: 105, name: '活动', aliases: ['活动'] },
+  { id: 276, name: '供奉', aliases: ['供奉', '聚所', '地区供奉'] },
+  { id: 211, name: '装扮', aliases: ['装扮'] },
+  { id: 260, name: '酒馆挑战', aliases: ['酒馆挑战', '酒馆'] },
 ]
 
 const cache = {
@@ -309,7 +331,9 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
     .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
 
   if (!results.length && !channelId) {
-    const lists = await Promise.all(WIKI_CHANNELS.map(channel => getChannelItems(channel.id).catch(() => [])))
+    const lists = await Promise.all(
+      WIKI_CHANNELS.filter(channel => !channel.heavy).map(channel => getChannelItems(channel.id).catch(() => [])),
+    )
     for (const items of lists) items.forEach(add)
     results = [...collected.values()]
       .map(item => ({ ...item, score: scoreItem(item, text) }))
@@ -429,6 +453,64 @@ export async function listWikiChannel(channel, page = 1, filters = []) {
     schema: items[0]?.filterSchema || [],
     items: matched.slice(start, start + size),
   }
+}
+
+export async function getWikiCalendar(days = 7) {
+  const cached = cache.lists.get('calendar')
+  const fresh = !cached || Date.now() - cached.time >= CACHE_TTL
+  const data = fresh
+    ? await requestJson(`${LIST_BASE}/common/blackboard/${APP_SN}/v1/get_activity_calendar?app_sn=${APP_SN}`)
+    : cached.items
+  if (fresh) cache.lists.set('calendar', { time: Date.now(), items: data })
+
+  const span = Math.min(14, Math.max(1, Number(days) || 7))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const week = ['日', '一', '二', '三', '四', '五', '六']
+  const rows = []
+
+  for (let offset = 0; offset < span; offset += 1) {
+    const date = new Date(today.getTime() + offset * 86400000)
+    const month = date.getMonth() + 1
+    const day = date.getDate()
+    const weekday = date.getDay() || 7
+    const start = Math.floor(date.getTime() / 1000)
+    const end = start + 86400
+    const birthdays = []
+    const talent = new Map()
+    const weapon = new Map()
+
+    for (const item of data?.list || []) {
+      if (String(item.kind) === '4') {
+        const time = Number(item.start_time)
+        if (time >= start && time < end) {
+          const name = String(item.title || '').replace(/^今天是|今天的/, '').replace(/的生日.*$/, '').trim()
+          if (name) birthdays.push({ name, icon: item.img_url || '' })
+        }
+        continue
+      }
+      if (String(item.kind) !== '2' || weekday === 7) continue
+      if (!(item.drop_day || []).map(Number).includes(weekday)) continue
+      const bucket = String(item.break_type) === '1' ? weapon : talent
+      const material = item.contentInfos?.[0]
+      const book = String(material?.title || '').split(/的|之/)[0]
+      const key = book || material?.title
+      if (!key || bucket.has(key)) continue
+      bucket.set(key, { name: material.title, icon: material.icon || '' })
+    }
+
+    rows.push({
+      label: offset === 0 ? '今天' : offset === 1 ? '明天' : `${month}月${day}日`,
+      date: `${month}月${day}日`,
+      week: '周' + week[date.getDay()],
+      birthdays,
+      talent: weekday === 7 ? [] : [...talent.values()],
+      weapon: weekday === 7 ? [] : [...weapon.values()],
+      open: weekday === 7,
+    })
+  }
+
+  return { rows }
 }
 
 export function parseCatalogQuery(input = '') {

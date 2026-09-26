@@ -15,6 +15,7 @@ import {
   findWikiFocus,
   getWikiEntry,
   listWikiChannel,
+  getWikiCalendar,
   parseCatalogQuery,
   parseWikiQuery,
   searchWiki,
@@ -25,6 +26,9 @@ const pluginRoot = path.join(__dirname, '..')
 const sessions = new Map()
 const videoEnabled = new Map()
 const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a, b) => b.length - a.length).join('|')
+const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flatMap(channel => channel.aliases)]
+  .sort((a, b) => b.length - a.length)
+  .join('|')
 const shortPattern = `^(?:#?g)?(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
 function escapeHtml(value) {
@@ -204,12 +208,13 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?(?:图鉴|观测枢)更新$', fnc: 'updatePlugin', priority: 40 },
         { reg: '^#?图鉴视频(?:\\s*(开|关))?$', fnc: 'toggleVideo' },
         { reg: '^#?图鉴(目录|列表|分类)(?:\\s+.*)?$', fnc: 'showCatalog' },
+        { reg: '^#?图鉴(日历|今天)(?:\\s+\\d+)?$', fnc: 'showCalendar' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
         { reg: `^#g(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
-        { reg: '^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\\s*(\\S+)$', fnc: 'queryAlias', priority: 50 },
+        { reg: `^#(${channelPattern})\\s*(\\S+)$`, fnc: 'queryAlias', priority: 50 },
         { reg: '^#?([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$', fnc: 'queryMedia', priority: 70 },
         { reg: '^#?g\\s*(\\S+)$', fnc: 'queryG', priority: 75 },
-        { reg: '^#(?!图鉴|观测枢|wiki|角色|人物|武器|圣遗物|遗物|圣遗|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具|背包)([^\\s#]{1,16})$', fnc: 'queryBare', priority: 78 },
+        { reg: `^#(?!${reserved})([^\\s#]{1,16})$`, fnc: 'queryBare', priority: 78 },
         { reg: shortPattern, fnc: 'queryShort', priority: 80 },
       ],
     })
@@ -276,13 +281,19 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ]],
       ['其他图鉴', [
         ['#武器 狼的末路', '武器属性和材料'],
-        ['饰金圣遗物', '套装和推荐角色'],
-        ['丘丘人敌人', '敌人资料'],
-        ['#食物 甜甜花酿鸡', '食谱和效果'],
-        ['#材料 霓裳花', '来源和用途'],
-        ['#图鉴目录 武器', '头像名册，可翻页'],
-        ['#图鉴目录 角色 火 五星', '按元素、地区、星级筛选'],
-        ['#图鉴目录 敌人 BOSS', '按类型筛选敌人'],
+        ['#圣遗物 饰金', '套装和推荐角色'],
+        ['#敌人 丘丘人', '敌人资料'],
+        ['#动物 虹晶星花鱼', '动物、书籍、秘境'],
+        ['#成就 无束的残月', '成就、任务、委托'],
+        ['#名片 原神·印象', '名片、头像、装扮'],
+      ]],
+      ['目录和日历', [
+        ['#图鉴目录', '全部分类'],
+        ['#图鉴目录 角色 火 五星', '元素、地区、星级、武器'],
+        ['#图鉴目录 深渊', '深渊、剧诗、危战'],
+        ['#图鉴日历', '未来 7 天生日和材料'],
+        ['#图鉴今天', '只看今天'],
+        ['#图鉴日历 3', '自定义天数，最多 14 天'],
       ]],
     ]
     const body = `<div class="help">
@@ -336,26 +347,26 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async showCatalog(e) {
     const parsed = parseCatalogQuery(String(e.msg || ''))
     if (!parsed.channel) {
-      const cards = WIKI_CHANNELS.map(channel => {
-        const sample = channel.id === 25
-          ? '#图鉴目录 角色 火 五星'
-          : channel.id === 5
-            ? '#图鉴目录 武器 五星 单手剑'
-            : channel.id === 218
-              ? '#图鉴目录 圣遗物 五星'
-              : channel.id === 6
-                ? '#图鉴目录 敌人 BOSS'
-                : channel.id === 21
-                  ? '#图鉴目录 食物 三星'
-                  : '#图鉴目录 材料 特产'
-        return `<div class="channel"><b>${escapeHtml(channel.name)}</b><span>${escapeHtml(sample)}</span></div>`
+      const groups = [
+        ['养成', [25, 5, 218, 13]],
+        ['世界', [6, 21, 49, 20, 54, 130, 276]],
+        ['内容', [252, 43, 55, 68, 105]],
+        ['终局', [65, 249, 275, 260]],
+        ['收集', [109, 244, 211, 278, 255]],
+        ['七圣召唤', [233, 234, 235]],
+      ]
+      const body = groups.map(([title, ids]) => {
+        const cards = ids.map(id => WIKI_CHANNELS.find(channel => channel.id === id)).filter(Boolean)
+          .map(channel => `<div class="channel"><b>${escapeHtml(channel.name)}</b><span>#${escapeHtml(channel.aliases[0])} 名字</span></div>`)
+          .join('')
+        return `<section><h3>${title}</h3><div class="channels">${cards}</div></section>`
       }).join('')
       await this.replyImage(e, this.wrapHtml({
         title: '图鉴目录',
-        subtitle: '选择分类后渲染头像名册',
-        body: `<div class="channels">${cards}</div>`,
-        footer: '条件可以叠加，例如 #图鉴目录 角色 璃月 冰 法器',
-        extraCss: '.channels{display:grid;grid-template-columns:1fr 1fr;gap:12px}.channel{min-height:78px;padding:14px 16px;background:#f8fafc;border-radius:14px}.channel b{display:block;color:#1e293b;font-size:20px}.channel span{display:block;margin-top:6px;color:#64748b;font-size:13px}',
+        subtitle: '先选分类，再叠加筛选',
+        body,
+        footer: '#图鉴目录 角色 火 五星 · #图鉴日历 · #图鉴今天',
+        extraCss: 'section{margin-bottom:14px}section h3{margin-bottom:8px;color:#334155;font-size:15px}.channels{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.channel{min-height:64px;padding:10px 12px;background:#f8fafc;border-radius:12px}.channel b{display:block;color:#1e293b;font-size:16px}.channel span{display:block;margin-top:4px;color:#64748b;font-size:12px}',
       }), '发送 #图鉴目录 角色，或 #图鉴目录 角色 火 五星')
       return true
     }
@@ -391,6 +402,37 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
       await e.reply('图鉴目录获取失败，请稍后重试')
+    }
+    return true
+  }
+
+  async showCalendar(e) {
+    const todayOnly = /今天/.test(String(e.msg || ''))
+    const days = todayOnly ? 1 : Math.min(14, parseInt(String(e.msg || '').match(/(\d+)\s*$/)?.[1] || '7', 10))
+    try {
+      const { rows } = await getWikiCalendar(days)
+      const chips = items => items.length
+        ? items.map(item => {
+          const icon = item.icon ? `<img src="${escapeHtml(item.icon)}" alt="">` : ''
+          return `<span>${icon}${escapeHtml(item.name)}</span>`
+        }).join('')
+        : '<em>无</em>'
+      const body = rows.map(row => `<section>
+        <h3><b>${escapeHtml(row.label)}</b><span>${escapeHtml(row.date)} ${escapeHtml(row.week)}</span></h3>
+        <div class="line"><em>生日</em><div>${chips(row.birthdays)}</div></div>
+        <div class="line"><em>天赋</em><div>${row.open ? '<em>全部开放</em>' : chips(row.talent)}</div></div>
+        <div class="line"><em>武器</em><div>${row.open ? '<em>全部开放</em>' : chips(row.weapon)}</div></div>
+      </section>`).join('')
+      await this.replyImage(e, this.wrapHtml({
+        title: todayOnly ? '今日图鉴' : '图鉴日历',
+        subtitle: '生日、天赋本和武器本',
+        body,
+        footer: '卡池和活动时间不在观测枢日历里，这里不显示',
+        extraCss: 'section{margin-bottom:12px;padding:12px 14px;background:#f8fafc;border-radius:14px}h3{display:flex;align-items:baseline;gap:8px;margin-bottom:8px}h3 b{color:#1e293b;font-size:18px}h3 span{color:#64748b;font-size:13px}.line{display:flex;gap:8px;margin-top:6px}.line>em{width:36px;flex-shrink:0;color:#64748b;font-style:normal;font-size:13px;line-height:28px}.line>div{display:flex;flex-wrap:wrap;gap:6px}.line span{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 3px;border-radius:999px;background:#fff;color:#1e293b;font-size:13px}.line img{width:22px;height:22px;border-radius:50%;object-fit:cover}.line em{color:#94a3b8;font-style:normal}',
+      }), '图鉴日历')
+    } catch (err) {
+      logger.error('[观测枢图鉴]', err)
+      await e.reply('日历获取失败，请稍后重试')
     }
     return true
   }
@@ -643,7 +685,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryAlias(e) {
-    const matched = String(e.msg || '').match(/^#(角色|人物|武器|圣遗物|遗物|敌人|怪物|魔物|食物|料理|食谱|材料|素材|道具)\s*(\S+)$/)
+    const matched = String(e.msg || '').match(new RegExp(`^#(${channelPattern})\\s*(\\S+)$`))
     if (!matched) return false
     e.msg = `#图鉴 ${matched[1]} ${matched[2]}`
     return this.query(e)
