@@ -1,5 +1,6 @@
 import plugin from '../../../lib/plugins/plugin.js'
 import puppeteer from '../../../lib/puppeteer/puppeteer.js'
+import { execFile } from 'child_process'
 import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
@@ -38,6 +39,27 @@ function textBlock(value) {
   return escapeHtml(value).replace(/\n/g, '<br>')
 }
 
+function runGit(args) {
+  return new Promise((resolve, reject) => {
+    execFile('git', args, {
+      cwd: pluginRoot,
+      timeout: 60000,
+      windowsHide: true,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    }, (err, stdout, stderr) => {
+      if (err) reject(new Error(String(stderr || stdout || err.message).trim() || 'git 执行失败'))
+      else resolve(String(stdout || '').trim())
+    })
+  })
+}
+
+function pluginVersion() {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(pluginRoot, 'package.json'), 'utf8')).version || ''
+  } catch {
+    return ''
+  }
+}
 function pathToFileURLSafe(filePath) {
   return 'file:///' + filePath.replace(/\\/g, '/').replace(/^\/+/, '')
 }
@@ -178,6 +200,7 @@ export default class WikiPlugin extends plugin {
       priority: 500,
       rule: [
         { reg: '^#?(?:g)?(?:图鉴帮助|观测枢帮助|wiki帮助)$', fnc: 'showHelp' },
+        { reg: '^#?(?:图鉴|观测枢)更新$', fnc: 'updatePlugin', priority: 40 },
         { reg: '^#?图鉴视频(?:\\s*(开|关))?$', fnc: 'toggleVideo' },
         { reg: '^#?图鉴(目录|列表|分类)(?:\\s+(\\S+))?(?:\\s+(\\d+))?$', fnc: 'showCatalog' },
         { reg: '^#?(?:图鉴|观测枢|wiki)\\s*(.+)$', fnc: 'query' },
@@ -230,20 +253,79 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async showHelp(e) {
     const on = this.videoOn(e)
+    const version = pluginVersion()
+    const bg = getBackgroundImageUrl()
+    const groups = [
+      ['角色资料', [
+        ['#角色 胡桃', '角色总览'],
+        ['#g天赋 胡桃', '天赋和升级材料'],
+        ['#g命座 胡桃', '六条命之座'],
+        ['#g突破 胡桃', '突破材料'],
+        ['#g故事 胡桃', '故事和配音'],
+        ['#g资料 胡桃', '生日、称号、所属'],
+      ]],
+      ['图片和动作', [
+        ['胡桃立绘', '全身立绘原图'],
+        ['胡桃动作', '待机和技能动图'],
+        ['g薇纳斯', '直接查角色'],
+        ['沃雅尼莎立绘', '差一个字也能对上'],
+        ['#图鉴2', '打开上次第 2 条'],
+        ['#图鉴视频开', `视频当前${on ? '已开启' : '已关闭'}`],
+      ]],
+      ['其他图鉴', [
+        ['#武器 狼的末路', '武器属性和材料'],
+        ['饰金圣遗物', '套装和推荐角色'],
+        ['丘丘人敌人', '敌人资料'],
+        ['#食物 甜甜花酿鸡', '食谱和效果'],
+        ['#材料 霓裳花', '来源和用途'],
+        ['#图鉴目录 武器', '按分类翻页'],
+      ]],
+    ]
     const body = `<div class="help">
-      <div class="brand"><b>观测枢图鉴</b><span>miHoYo</span></div>
-      <div class="cols">
-        <div><em>角色</em><p><b>#角色 胡桃</b>总览</p><p><b>#g天赋 胡桃</b>天赋和材料</p><p><b>#g命座 胡桃</b>六条命座</p><p><b>#g突破 胡桃</b>突破材料</p><p><b>#g故事 胡桃</b>故事和配音</p><p><b>#g资料 胡桃</b>生日和称号</p></div>
-        <div><em>图和动作</em><p><b>胡桃立绘</b>全身原图</p><p><b>胡桃动作</b>动作动图</p><p><b>g薇纳斯</b>角色总览</p><p><b>饰金圣遗物</b>套装图鉴</p><p><b>丘丘人敌人</b>敌人图鉴</p><p><b>#图鉴2</b>打开上次第 2 条</p></div>
+      <div class="mast">
+        <div>
+          <h1>观测枢图鉴</h1>
+          <p>Yunzai · 米游社观测枢</p>
+        </div>
+        <b>miHoYo</b>
       </div>
-      <div class="note">名字能对上唯一词条时直接出图，只有重名才给列表。视频解析当前${on ? '已开启' : '已关闭'}，用 #图鉴视频开 或 #图鉴视频关。</div>
+      ${groups.map(([title, items]) => `<section>
+        <h2>${title}</h2>
+        <div class="grid">${items.map(([cmd, desc]) => `<div class="cell"><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div>`).join('')}</div>
+      </section>`).join('')}
+      <div class="foot">名字能对上就直接出图。新角色随观测枢更新，不用改插件。${version ? ' v' + escapeHtml(version) : ''}</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
       body,
-      footer: '数据来自米游社观测枢。裸写 #胡桃 不会触发。',
-      extraCss: '.help{display:flex;flex-direction:column;gap:14px}.brand{display:flex;align-items:flex-end;justify-content:space-between;padding-bottom:10px;border-bottom:2px solid #dbe3ee}.brand b{color:#1e293b;font-size:28px}.brand span{padding:4px 10px;border-radius:8px;background:#111827;color:#fff;font-size:13px;font-weight:800;letter-spacing:.08em}.cols{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cols div{padding:12px;border-radius:14px;background:#f8fafc}.cols em{display:block;margin-bottom:6px;color:#64748b;font-style:normal;font-size:12px;font-weight:800}.cols p{margin-top:6px;color:#475569;font-size:13px;line-height:1.45}.cols b{margin-right:8px;color:#1d4ed8}.note{color:#475569;font-size:13px;line-height:1.7}',
+      footer: '',
+      extraCss: `body{background:#d7e3ef url("${bg}") center/cover no-repeat}.page{background:transparent;padding:28px}.container{width:860px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column;gap:14px}.mast{display:flex;align-items:flex-end;justify-content:space-between;padding:8px 8px 2px}.mast h1{color:#fff;font-size:46px;line-height:1;letter-spacing:.04em;text-shadow:0 6px 18px rgba(15,23,42,.45)}.mast p{margin-top:8px;color:rgba(255,255,255,.86);font-size:15px;letter-spacing:.08em}.mast b{padding:7px 12px;border:1px solid rgba(255,255,255,.45);border-radius:12px;background:rgba(255,255,255,.18);color:#fff;font-size:14px;letter-spacing:.14em;backdrop-filter:blur(12px)}section{padding:16px;border:1px solid rgba(255,255,255,.38);border-radius:18px;background:rgba(17,24,39,.46);box-shadow:0 10px 28px rgba(15,23,42,.18);backdrop-filter:blur(16px)}section h2{margin-bottom:10px;color:#fff;font-size:16px}section .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.cell{min-height:62px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.10)}.cell b{display:block;color:#f8fafc;font-size:14px;line-height:1.35}.cell span{display:block;margin-top:3px;color:rgba(226,232,240,.78);font-size:12px;line-height:1.4}.foot{color:rgba(255,255,255,.9);font-size:13px;text-align:center;text-shadow:0 2px 8px rgba(15,23,42,.45)}`,
     }), '发送 #角色 胡桃，或 胡桃立绘')
+    return true
+  }
+
+  async updatePlugin(e) {
+    if (!e.isMaster) {
+      await e.reply('只有主人可以更新图鉴插件。')
+      return true
+    }
+    await e.reply('正在拉取观测枢图鉴更新…')
+    try {
+      const before = await runGit(['rev-parse', '--short', 'HEAD']).catch(() => '')
+      await runGit(['fetch', '--all', '--prune'])
+      const remote = await runGit(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}']).catch(() => 'origin/master')
+      await runGit(['pull', '--ff-only'])
+      const after = await runGit(['rev-parse', '--short', 'HEAD']).catch(() => '')
+      const note = await runGit(['log', '-1', '--pretty=%s']).catch(() => '')
+      if (before && before === after) {
+        await e.reply(`已经是最新。${after}${note ? ' ' + note : ''}`)
+        return true
+      }
+      await e.reply(`已从 ${remote} 更新到 ${after || '最新'}。${note ? note + '。' : ''}请重启 Yunzai 后生效。`)
+    } catch (err) {
+      logger.error('[观测枢图鉴] 更新失败:', err)
+      await e.reply('更新失败：' + String(err.message || err).slice(0, 180))
+    }
     return true
   }
 
@@ -416,7 +498,18 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const forward = await e.group.makeForwardMsg(motions.map(item => ({
       message: [item.name || '动作', segment.image(item.src)],
       nickname: entry.name,
+      user_id: 10000,
     })))
+    const icon = entry.icon || ''
+    if (icon && forward?.data) {
+      const nodes = Array.isArray(forward.data) ? forward.data : null
+      for (const node of nodes || []) {
+        const author = node?.data
+        if (!author || typeof author !== 'object') continue
+        if ('name' in author || 'uin' in author || 'avatar' in author) author.avatar = icon
+      }
+      if (!nodes && typeof forward.data === 'object') forward.data.avatar = icon
+    }
     await e.reply(forward)
   }
 

@@ -79,8 +79,8 @@ function normalizeName(value) {
 
 // 观测枢词条的 alias_name 是空的，角色俗称只能在本地维护。
 const CHARACTER_ALIASES = {
-  薇斯纳: ['维纳斯', '薇纳斯', '维纳', '维斯纳', '维斯娜'],
-  沃雅妮莎: ['沃雅'],
+  薇斯纳: ['维纳斯', '薇纳斯', '薇奈斯', '维奈斯', '维纳', '维斯纳', '维斯娜'],
+  沃雅妮莎: ['沃雅', '沃雅尼莎', '沃雅尼沙', '沃雅妮沙'],
   伊涅芙: ['伊涅'],
   菲林斯: ['菲林'],
   阿蕾奇诺: ['仆人', '阿蕾', '父亲'],
@@ -164,8 +164,47 @@ for (const [name, aliases] of Object.entries(CHARACTER_ALIASES)) {
   }
 }
 
+function aliasDistance(query, alias) {
+  if (!query || !alias || query === alias) return query && query === alias ? 0 : 99
+  if (Math.abs(query.length - alias.length) > 1) return 99
+  let edits = 0
+  let i = 0
+  let j = 0
+  while (i < query.length && j < alias.length) {
+    if (query[i] === alias[j]) {
+      i += 1
+      j += 1
+      continue
+    }
+    edits += 1
+    if (edits > 1) return edits
+    if (query.length === alias.length) {
+      i += 1
+      j += 1
+    } else if (query.length > alias.length) {
+      i += 1
+    } else {
+      j += 1
+    }
+  }
+  return edits + (query.length - i) + (alias.length - j)
+}
+
+function fuzzyAliasTargets(keyword) {
+  const query = normalizeName(keyword)
+  if (query.length < 3) return []
+  const hits = []
+  for (const [alias, names] of CHARACTER_ALIAS_INDEX) {
+    if (aliasDistance(query, alias) !== 1) continue
+    for (const name of names) {
+      if (!hits.includes(name)) hits.push(name)
+    }
+  }
+  return hits
+}
+
 function aliasTargets(keyword) {
-  return CHARACTER_ALIAS_INDEX.get(normalizeName(keyword)) || []
+  return CHARACTER_ALIAS_INDEX.get(normalizeName(keyword)) || fuzzyAliasTargets(keyword)
 }
 
 async function requestJson(url) {
@@ -654,7 +693,13 @@ function parseComponent(component, moduleName) {
     const images = (data.list || [])
       .filter(item => item?.image && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(item.image))
       .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image, motion: /\.gif(\?|$)/i.test(item.image) }))
-    return images.length ? { title, lines: [], images } : null
+    if (!images.length) return null
+    const stills = images.filter(item => !item.motion)
+    const motions = images.filter(item => item.motion)
+    if (stills.length && !motions.length) {
+      return { title, lines: [], images: stills, focus: 'portrait' }
+    }
+    return { title, lines: [], images: motions.length ? motions : images, portraits: stills.length && motions.length ? stills : [] }
   }
   if (id === 'artifact_list_v2') {
     const card = parseArtifact(data, moduleName)
@@ -785,7 +830,7 @@ function focusOf(title = '', images = []) {
   if (STORY_TITLE.test(title)) return 'story'
   if (PROFILE_TITLE.test(title)) return 'profile'
   if (/展示/.test(title) && images.length) {
-    const still = images.every(item => !item.motion && /\.(png|jpe?g|webp)(\?|$)/i.test(item.src) && !/待机|攻击|战技|爆发|重击/.test(item.name))
+    const still = images.every(item => !item.motion)
     return still ? 'portrait' : 'showcase'
   }
   if (/视频|PV|演示|预告/.test(title)) return 'video'
@@ -803,8 +848,12 @@ export function formatWikiEntry(page) {
     if (module.is_hidden) continue
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
-      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length && !parsed?.images?.length && !parsed?.videos?.length) continue
-      pending.push({ ...parsed, focus: parsed.videos?.length ? 'video' : focusOf(parsed.title, parsed.images || []) })
+      if (!parsed) continue
+      const hasContent = parsed.lines?.some(Boolean) || parsed.groups?.length || parsed.cards?.length || parsed.images?.length || parsed.videos?.length || parsed.portraits?.length
+      if (!hasContent) continue
+      const focus = parsed.focus || (parsed.videos?.length ? 'video' : focusOf(parsed.title, parsed.images || []))
+      if (focus === 'portrait') parsed.images = (parsed.images || []).map(item => ({ ...item, name: '' }))
+      pending.push({ ...parsed, focus })
     }
   }
 
@@ -819,27 +868,44 @@ export function formatWikiEntry(page) {
   ]
 
   for (const parsed of ordered) {
-    const previous = sections.find(section => section.title === parsed.title && section.focus === parsed.focus)
+    const previous = sections.find(section => {
+      if (section.title !== parsed.title || section.focus !== parsed.focus) return false
+      const sectionStill = !(section.images || []).some(item => item.motion)
+      const parsedStill = !(parsed.images || []).some(item => item.motion)
+      return sectionStill === parsedStill
+    })
     if (previous) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
       previous.images = [...(previous.images || []), ...(parsed.images || [])]
+      previous.portraits = [...(previous.portraits || []), ...(parsed.portraits || [])]
       previous.videos = [...(previous.videos || []), ...(parsed.videos || [])]
       if (parsed.lines?.length) previous.text = [previous.text, ...parsed.lines].filter(Boolean).join('\n')
       continue
     }
-    const key = parsed.focus + parsed.title + parsed.lines.join('\n')
+    const key = [
+      parsed.focus,
+      parsed.title,
+      (parsed.images || []).some(item => item.motion) ? 'motion' : 'still',
+      parsed.lines.join('\n'),
+    ].join('\0')
     if (seen.has(key)) continue
     seen.add(key)
     pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images, parsed.videos)
     const current = sections[sections.length - 1]
-    if (current) current.focus = parsed.focus
+    if (current) {
+      current.focus = parsed.focus
+      current.portraits = parsed.portraits || []
+    }
   }
 
-  const character = isCharacterPage(page)
-  const portraits = sections.flatMap(section => section.focus === 'portrait' ? section.images : [])
+  const portraits = [
+    ...sections.flatMap(section => section.focus === 'portrait' ? section.images : []),
+    ...sections.flatMap(section => section.portraits || []),
+  ]
   const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
   const videos = sections.flatMap(section => section.videos || [])
+  const character = isCharacterPage(page)
   const overview = character
     ? sections.filter(section => /推荐装备|特殊料理|圣遗物|基础资料/.test(section.title)).slice(0, 4)
     : sections.filter(section => !STORY_TITLE.test(section.title) && section.focus !== 'video').slice(0, 5)
