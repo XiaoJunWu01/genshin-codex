@@ -1,0 +1,120 @@
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+function pluginFile(relative) {
+  const candidates = [
+    path.resolve(pluginRoot, '..', '..', 'plugins', relative),
+    path.join('E:\\TRSS\\home\\a\\TRSS_AllBot\\TRSS-Yunzai\\plugins', relative),
+  ]
+  return candidates.find(file => fs.existsSync(file)) || ''
+}
+const sources = {
+  gs: [
+    ['miao-plugin/resources/meta-gs/character/alias.js', 'character'],
+    ['miao-plugin/resources/meta-gs/weapon/alias.js', 'weapon'],
+    ['miao-plugin/resources/meta-gs/artifact/alias.js', 'artifact'],
+  ],
+  sr: [
+    ['miao-plugin/resources/meta-sr/character/alias.js', 'character'],
+    ['miao-plugin/resources/meta-sr/weapon/alias.js', 'weapon'],
+    ['miao-plugin/resources/meta-sr/artifact/alias.js', 'artifact'],
+    ['StarRail-plugin/defSet/alias.yaml', 'character'],
+  ],
+  zzz: [
+    ['ZZZ-Plugin/defSet/alias.yaml', 'character'],
+  ],
+}
+const cache = new Map()
+
+function normalize(value) {
+  return String(value || '').replace(/[【】\[\]()（）·•・\s]/g, '').toLowerCase()
+}
+
+function splitAliases(value) {
+  if (Array.isArray(value)) return value.map(item => String(item).trim()).filter(Boolean)
+  return String(value || '').split(/[,，、]/).map(item => item.trim()).filter(Boolean)
+}
+
+function readPairs(file) {
+  const text = fs.readFileSync(file, 'utf8')
+  if (file.endsWith('.yaml') || file.endsWith('.yml')) return parseYaml(text)
+  const body = text.match(/export const \w+\s*=\s*\{([\s\S]*)\}\s*$/)?.[1] || ''
+  const pairs = []
+  for (const line of body.split(/\r?\n/)) {
+    const matched = line.match(/^\s*(?:'([^']+)'|"([^"]+)"|([^:,'"]+))\s*:\s*'([^']*)'/)
+    if (!matched) continue
+    pairs.push([matched[1] || matched[2] || matched[3].trim(), splitAliases(matched[4])])
+  }
+  return pairs
+}
+
+function parseYaml(text) {
+  const pairs = []
+  let name = ''
+  let aliases = []
+  const flush = () => {
+    if (name) pairs.push([name, aliases])
+    name = ''
+    aliases = []
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.replace(/\s+#.*$/, '')
+    if (!line.trim()) continue
+    const head = line.match(/^([^:\s][^:]*):\s*(.*)$/)
+    if (head && !/^\s/.test(line)) {
+      flush()
+      name = head[1].trim().replace(/^['\"]|['\"]$/g, '')
+      if (head[2].trim()) aliases = splitAliases(head[2])
+      continue
+    }
+    const item = line.match(/^\s*-\s+(.+)$/)
+    if (item && name) aliases.push(item[1].trim().replace(/^['\"]|['\"]$/g, ''))
+  }
+  flush()
+  return pairs
+}
+
+function load(game) {
+  const index = new Map()
+  const add = (name, aliases, kind) => {
+    const official = String(name || '').trim()
+    if (!official) return
+    for (const alias of [official, ...aliases]) {
+      const key = normalize(alias)
+      if (key.length < 2) continue
+      if (!index.has(key)) index.set(key, [])
+      const list = index.get(key)
+      if (!list.some(item => item.name === official && item.kind === kind)) list.push({ name: official, kind })
+    }
+  }
+  for (const [relative, kind] of sources[game] || []) {
+    const file = pluginFile(relative)
+    if (!fs.existsSync(file)) continue
+    try {
+      for (const [name, aliases] of readPairs(file)) add(name, aliases, kind)
+    } catch (err) {
+      logger?.warn?.(`[图鉴别名] ${relative} 读取失败:`, err.message || err)
+    }
+  }
+  return index
+}
+
+function indexOf(game) {
+  const cached = cache.get(game)
+  if (cached) return cached
+  const index = load(game)
+  cache.set(game, index)
+  return index
+}
+
+export function aliasNames(game, keyword) {
+  const key = normalize(keyword)
+  if (!key) return []
+  return (indexOf(game).get(key) || []).map(item => item.name)
+}
+
+export function aliasStats() {
+  return Object.fromEntries(Object.keys(sources).map(game => [game, indexOf(game).size]))
+}

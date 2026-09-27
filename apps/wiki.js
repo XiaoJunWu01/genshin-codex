@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { mediaGroups, mediaVideos } from '../model/games.js'
+import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
   WIKI_FOCUS,
@@ -217,7 +217,7 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
         { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo', priority: 40 },
-        { reg: `^${lead}(?:影音|影音回廊|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^${lead}(?:影音|影音回廊|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
         { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
@@ -312,7 +312,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#g装扮 名字', '装扮和幻形', '饰'],
         ['#g灰眸 标识', '灰眸和组织', '眸'],
         ['#gNPC 叶尔莫莱', 'NPC 和商店', '人'],
-        ['g影音', '角色视频、过场动画、其他视频', '影'],
+        ['g影音 薇斯纳', '先看封面，再选一条播放', '影'],
       ]],
       ['原神 · g', [
         ['#g图鉴目录', '全部分类和筛选', '目'],
@@ -325,7 +325,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['s行迹 流萤', '行迹全文', '迹'],
         ['s星魂 流萤', '六条星魂', '魂'],
         ['s晋阶 流萤', '晋阶材料和满级属性', '阶'],
-        ['s视频 流萤', '角色 PV、动画和剧情 CG', '影'],
+        ['s影音 流萤', '先选一条再播放', '影'],
         ['s光锥 记一位友人', '光锥效果和晋阶材料', '锥'],
         ['s表情包', '米游社表情包', '表'],
       ]],
@@ -334,7 +334,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['z技能 妮可', '技能全文', '技'],
         ['z影画 妮可', '代理人影画', '画'],
         ['z突破 妮可', '突破材料和信赖奖励', '突'],
-        ['z视频 妮可', '角色视频和游戏视频', '影'],
+        ['z影音 妮可', '先选一条再播放', '影'],
         ['z音擎 聚宝箱', '音擎和突破材料', '擎'],
         ['z壁纸', '节日和版本壁纸', '纸'],
       ]],
@@ -564,7 +564,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (focus?.id === 'portrait') return this.sendPortraits(e, entry)
     if (focus?.id === 'showcase') return this.sendMotions(e, entry)
     if (focus?.id === 'video' || (!focus && entry.videos?.length && !entry.sections?.length)) {
-      return this.sendVideos(e, entry)
+      if (!this.videoOn(e)) {
+        await e.reply('角色视频解析默认关闭。发送 #图鉴视频开 后，再查这一条。')
+        return
+      }
+      const clips = (entry.videos || []).map(clip => ({ name: clip.name || entry.name, src: clip.src, cover: '', summary: '', group: '角色视频' }))
+      if (!clips.length) {
+        await e.reply(`「${entry.name}」没有可播放的视频。`)
+        return
+      }
+      return this.showVideoPage(e, clips, entry.name, 1)
     }
     const part = focus ? entry.parts?.[focus.id] || [] : null
     if (focus && !part.length) {
@@ -602,29 +611,64 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async gallery(e) {
     const raw = String(e.msg || '').replace(/^#?g?\s*/, '')
-    const kind = raw.startsWith('过场动画') ? '过场动画' : raw.startsWith('其他视频') ? '其他视频' : ''
-    const keyword = raw.replace(/^(?:影音回廊|影音|过场动画|其他视频)\s*/, '').trim() || kind
+    const words = raw.split(/\s+/).filter(Boolean)
+    const page = /^\d+$/.test(words.at(-1) || '') && words.length > 1 ? parseInt(words.pop(), 10) : 1
+    const kind = /^(?:过场动画|其他视频|角色视频)/.test(words[0] || '') ? words.shift() : ''
+    const keyword = words.join('').replace(/^(?:影音回廊|影音)/, '')
     try {
-      if (!keyword) {
+      if (!keyword && !kind) {
         const items = await mediaGroups('ys')
         const count = name => items.filter(item => item.group === name).length
-        await e.reply(['原神影音回廊', `g过场动画（${count('过场动画')}）`, `g其他视频（${count('其他视频')}）`, `角色视频 ${count('角色视频')} 条，发送 g角色视频 名字`].join('\n'))
+        await e.reply(['原神影音', `g角色视频（${count('角色视频')}）`, `g过场动画（${count('过场动画')}）`, `g其他视频（${count('其他视频')}）`, '搜索：g影音 名字，选序号播放'].join('\n'))
         return true
       }
-      const result = await mediaVideos('ys', keyword)
-      if (result.names?.length) {
-        await e.reply([`找到 ${result.total} 条，写出名字再发送：`, ...result.names.map(name => `g影音 ${name}`), result.total > result.names.length ? `还有 ${result.total - result.names.length} 条` : ''].filter(Boolean).join('\n'))
+      const result = await mediaVideos('ys', keyword || kind)
+      if (!result.items.length) {
+        await e.reply(`影音没有找到「${keyword || kind}」。`)
         return true
       }
-      if (!result.clips.length) {
-        await e.reply(`影音回廊没有找到「${keyword}」。`)
-        return true
-      }
-      const more = result.total > result.clips.length ? `\n还有 ${result.total - result.clips.length} 条，把名字写完整再查。` : ''
-      await e.reply([...result.clips.flatMap(item => [`${item.group} · ${item.name}`, segment.video(item.src)]), more].filter(Boolean))
+      return this.showVideoPage(e, result.items, keyword || kind, page)
     } catch (err) {
       logger.error('[原神影音]', err)
-      await e.reply('影音回廊获取失败，请稍后重试')
+      await e.reply('影音获取失败，请稍后重试')
+    }
+    return true
+  }
+
+  async showVideoPage(e, items, keyword, page) {
+    const size = 4
+    const totalPage = Math.max(1, Math.ceil(items.length / size))
+    const current = Math.min(Math.max(page, 1), totalPage)
+    sessions.set(this.sessionKey(e), { videos: items, keyword, time: Date.now() })
+    const start = (current - 1) * size
+    const rows = items.slice(start, start + size).map((item, index) => {
+      const no = start + index + 1
+      const icon = item.cover ? `<img src="${escapeHtml(item.cover)}" alt="">` : '<span class="placeholder"></span>'
+      const summary = clipText(item.summary || item.group || '', 72)
+      return `<div class="result">${icon}<div><b>${no}. ${escapeHtml(item.name)}</b><span>${escapeHtml(item.group || '视频')}</span>${summary ? `<em>${escapeHtml(summary)}</em>` : ''}</div></div>`
+    }).join('')
+    const next = current < totalPage ? `<br>下一页：g影音 ${keyword} ${current + 1}` : ''
+    await this.replyImage(e, this.wrapHtml({
+      title: `「${keyword}」的视频`,
+      subtitle: `第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,
+      body: `<div class="results">${rows}</div>`,
+      footer: `发送 #图鉴${start + 1} 播放这一条${next}`,
+      extraCss: resultCss,
+    }), items.slice(start, start + size).map((item, index) => `${start + index + 1}. ${item.name}`).join('\n'))
+    return true
+  }
+
+  async playVideo(e, item) {
+    try {
+      const src = /^https?:/i.test(item.src || '') ? item.src : (await mediaClip('ys', item.id))?.src
+      if (!src) {
+        await e.reply(`「${item.name}」暂时无法播放。`)
+        return true
+      }
+      await e.reply([item.name, segment.video(src)])
+    } catch (err) {
+      logger.error('[原神影音]', err)
+      await e.reply('视频获取失败，请稍后重试')
     }
     return true
   }
@@ -678,23 +722,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async sendVideos(e, entry) {
-    if (!this.videoOn(e)) {
-      await e.reply('角色视频解析默认关闭。发送 #图鉴视频开 后，再查这一条。')
-      return
-    }
-    const clips = entry.videos || []
-    if (!clips.length) {
-      await e.reply(`「${entry.name}」没有可播放的视频。`)
-      return
-    }
-    await e.reply(clips.flatMap(clip => [clip.name || entry.name, segment.video(clip.src)]))
+    return this.showEntry(e, { id: entry.id, name: entry.name }, '', { id: 'video', name: '视频' })
   }
 
   async queryShort(e) {
     const matched = String(e.msg || '').match(new RegExp(shortPattern))
     const channel = findWikiChannel(matched?.[3])
     const keyword = String(matched?.[2] || '').trim()
-    if (!channel || !keyword || keyword.length > 12 || /^(图鉴|观测枢|wiki)$/.test(keyword)) return false
+    if (!channel || !keyword || keyword.length > 12 || keyword.length < 2 || /^(图鉴|观测枢|wiki)$/.test(keyword)) return false
     const focus = findWikiFocus(matched?.[1])
     e.msg = focus ? `#g${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
     return focus ? this.queryFocus(e) : this.query(e)
@@ -793,8 +828,17 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     try {
       if (/^\d+$/.test(input)) {
         const cached = sessions.get(key)
+        const index = parseInt(input, 10) - 1
+        if (cached?.videos && Date.now() - cached.time < 10 * 60 * 1000) {
+          const item = cached.videos[index]
+          if (!item) {
+            await e.reply(`没有第 ${index + 1} 条。当前共 ${cached.videos.length} 条。`)
+            return true
+          }
+          return this.playVideo(e, item)
+        }
         const target = cached && Date.now() - cached.time < 10 * 60 * 1000
-          ? cached.results[parseInt(input, 10) - 1]
+          ? cached.results[index]
           : null
         if (!target) {
           await e.reply('没有这条序号。请先搜索，例如 #图鉴 银釭')

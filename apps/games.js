@@ -19,7 +19,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import {
   channelOf, channelPattern, focusOf, gameOf,
-  getGameEntry, listGame, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
+  getGameEntry, listGame, mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
 import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
@@ -100,10 +100,10 @@ export default class GameWikiPlugin extends plugin {
       rule: [
         { reg: `^#?[${letters}](?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^#?[${letters}](?![a-z#])\\s*\\S+`, fnc: 'query' },
-        { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^(?:#|g)?(?:${words})(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^(?:#|g)?(?:${words})\\s*\\S+`, fnc: 'query' },
-        { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
       ],
     })
   }
@@ -187,8 +187,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (command.rest && command.rest !== '帮助') return false
     const game = gameOf(command.key)
     const lines = command.key === 'sr'
-      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's视频 流萤', 's表情包']
-      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z视频 妮可', 'z壁纸']
+      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's影音 流萤', 's表情包']
+      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z影音 妮可', 'z壁纸']
     await e.reply([`${game.name}图鉴（${mark(game)} 前缀）`, ...lines].join('\n'))
     return true
   }
@@ -200,10 +200,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (!rest || rest === '帮助') return this.help(e)
     try {
       if (/^\d+$/.test(rest)) return this.openIndex(e, command.key, parseInt(rest, 10))
-      const channel = await channelOf(command.key, rest.split(/\s+/)[0])
-      const focus = focusOf(command.key, rest.split(/\s+/)[0])
-      const keyword = (channel || focus) ? rest.split(/\s+/).slice(1).join('') : rest.replace(/\s+/g, '')
+      const words = rest.split(/\s+/).filter(Boolean)
+      const page = /^\d+$/.test(words.at(-1) || '') && words.length > 1 ? parseInt(words.pop(), 10) : 0
+      const lead = words[0] || ''
+      const channel = words.length > 1 ? await channelOf(command.key, lead) : null
+      const focus = words.length > 1 ? focusOf(command.key, lead) : null
+      const keyword = (channel || focus) ? words.slice(1).join('') : words.join('')
       if (!keyword) return this.catalog(e, command.key, channel)
+      if (page && /影音|视频/.test(rest)) return this.openVideoPage(e, command.key, keyword, page)
       const results = await searchGame(command.key, keyword, { channelId: channel?.id || 0, limit: 8 })
       if (!results.length) {
         await e.reply(`${game.name}没有找到「${keyword}」。`)
@@ -249,12 +253,33 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async openIndex(e, key, index) {
     const game = gameOf(key)
     const cached = sessions.get(this.sessionKey(e, key))
+    if (cached?.videos && Date.now() - cached.time < 10 * 60 * 1000) {
+      const item = cached.videos[index - 1]
+      if (!item) {
+        await e.reply(`没有第 ${index} 条。当前共 ${cached.videos.length} 条。`)
+        return true
+      }
+      return this.playVideo(e, key, item)
+    }
     const target = cached && Date.now() - cached.time < 10 * 60 * 1000 ? cached.results[index - 1] : null
     if (!target) {
       await e.reply(`没有这条序号。请先搜索，例如 ${mark(game)}名字`)
       return true
     }
     return this.show(e, key, target, focusOf(key, cached.focus))
+  }
+
+  async openVideoPage(e, key, keyword, page) {
+    const cached = sessions.get(this.sessionKey(e, key))
+    if (cached?.videos && cached.keyword === keyword && Date.now() - cached.time < 10 * 60 * 1000) {
+      return this.showVideoPage(e, key, cached.videos, keyword, page)
+    }
+    const result = await mediaVideos(key, keyword)
+    if (!result.items.length) {
+      await e.reply(`没有找到「${keyword}」的视频。`)
+      return true
+    }
+    return this.showVideoPage(e, key, result.items, keyword, page)
   }
 
   async show(e, key, target, focus) {
@@ -317,28 +342,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await e.reply(`「${entry.name}」没有收录视频。`)
       return true
     }
-    const nodes = []
-    for (const clip of clips.slice(0, 8)) {
-      try {
-        const src = await resolveVideo(key, clip.page)
-        if (src) nodes.push({ name: clip.name || '视频', src })
-      } catch (err) {
-        logger.warn('[图鉴视频]', err)
-      }
-    }
-    if (!nodes.length) {
-      await e.reply(`${entry.name}的视频暂时无法播放。`)
-      return true
-    }
-    await e.reply(nodes.flatMap(item => [item.name, segment.video(item.src)]))
-    return true
+    const game = gameOf(key)
+    const items = clips.map((clip, index) => ({ id: String(index), name: clip.name || '视频', cover: clip.cover || '', summary: '', page: clip.page }))
+    return this.showVideoPage(e, key, items, entry.name, 1)
   }
 
   async gallery(e) {
     const command = commandOf(e.msg)
     const game = gameOf(command.key)
     const spec = mediaOf(command.key)
-    const keyword = command.rest.replace(/^(?:表情包|壁纸)/, '').trim()
+    const keyword = command.rest.replace(/^(?:表情包|壁纸|影音|角色视频|其他视频)/, '').trim()
     if (spec?.kind === 'wallpaper' && /表情包/.test(command.rest)) {
       await e.reply(`${game.name}没有表情包收录，发送 ${mark(game)}壁纸 查看壁纸。`)
       return true
@@ -347,6 +360,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await e.reply(`${game.name}的收录是表情包，发送 ${mark(game)}表情包。`)
       return true
     }
+    if (spec?.videos && /^(?:影音|角色视频|其他视频)/.test(command.rest)) return this.showMedia(e, command.key, keyword)
+    if (spec?.kind === 'video') return this.showMedia(e, command.key, keyword)
     try {
       const groups = await mediaGroups(command.key)
       const chosen = keyword ? groups.find(item => item.name === keyword) || groups.find(item => item.name.includes(keyword)) : null
@@ -363,6 +378,67 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     } catch (err) {
       logger.error(`[${game.name}${spec?.name || '图集'}]`, err)
       await e.reply('图片获取失败，请稍后重试')
+    }
+    return true
+  }
+
+  async showMedia(e, key, keyword) {
+    const game = gameOf(key)
+    const spec = mediaOf(key)
+    try {
+      if (!keyword) {
+        const items = await mediaGroups(key)
+        const groups = spec.groups || spec.videos || []
+        const lines = groups.map(group => `${mark(game)}${group.name}（${items.filter(item => item.group === group.name).length}）`)
+        await e.reply([`${game.name}${spec.name}`, ...lines, `搜索：${mark(game)}影音 名字`].join('\n'))
+        return true
+      }
+      const result = await mediaVideos(key, keyword)
+      if (!result.items.length) {
+        await e.reply(`${spec.name}没有找到「${keyword}」。`)
+        return true
+      }
+      return this.showVideoPage(e, key, result.items, keyword, 1)
+    } catch (err) {
+      logger.error(`[${game.name}${spec.name}]`, err)
+      await e.reply('视频获取失败，请稍后重试')
+      return true
+    }
+  }
+
+  async showVideoPage(e, key, items, keyword, page) {
+    const size = 4
+    const totalPage = Math.max(1, Math.ceil(items.length / size))
+    const current = Math.min(Math.max(page, 1), totalPage)
+    sessions.set(this.sessionKey(e, key), { videos: items, keyword, page: current, time: Date.now() })
+    const game = gameOf(key)
+    const start = (current - 1) * size
+    const cards = items.slice(start, start + size).map((item, index) => ({
+      name: `${start + index + 1}. ${item.name}`,
+      text: item.summary || item.group || '',
+      icons: item.cover ? [item.cover] : [],
+    }))
+    const next = current < totalPage ? `<br>下一页：${mark(game)}影音 ${keyword} ${current + 1}` : ''
+    await this.replyImage(e, this.page({
+      title: `「${keyword}」的视频`,
+      subtitle: `${game.name} · 第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,
+      body: boardHtml(cards, { columns: 1 }),
+      footer: `发送 ${mark(game)}${start + 1} 播放这一条${next}`,
+    }), items.slice(start, start + size).map((item, index) => `${start + index + 1}. ${item.name}`).join('\n'))
+    return true
+  }
+
+  async playVideo(e, key, item) {
+    try {
+      const src = item.page ? await resolveVideo(key, item.page) : (await mediaClip(key, item.id))?.src
+      if (!src) {
+        await e.reply(`「${item.name}」暂时无法播放。`)
+        return true
+      }
+      await e.reply([item.name, segment.video(src)])
+    } catch (err) {
+      logger.error('[图鉴视频]', err)
+      await e.reply('视频获取失败，请稍后重试')
     }
     return true
   }

@@ -1,3 +1,4 @@
+import { aliasNames } from './alias.js'
 const LIST_BASE = 'https://act-api-takumi-static.mihoyo.com'
 const ENTRY_BASE = 'https://act-api-takumi-static.mihoyo.com'
 const SEARCH_BASE = 'https://api-takumi.mihoyo.com'
@@ -192,7 +193,14 @@ function scoreItem(item, keyword) {
     if (text.includes(query)) return 60
     return 0
   }
-  return Math.max(rank(item.name), rank(item.fullName), rank(item.alias))
+  const mapped = aliasNames(item.game, keyword).some(name => {
+    const target = normalizeName(name)
+    return [item.name, item.fullName].some(value => {
+      const text = normalizeName(value)
+      return text === target || (text.startsWith(target) && text.length <= target.length + 4) || (target.startsWith(text) && target.length <= text.length + 4)
+    })
+  })
+  return Math.max(rank(item.name), rank(item.fullName), rank(item.alias), mapped ? 100 : 0)
 }
 
 async function searchRemote(game, keyword) {
@@ -205,7 +213,7 @@ async function searchRemote(game, keyword) {
     summary: stripHtml(item.summary || ''),
     channelId: Number(item.channels?.[0]?.channel_id || 0),
     channelName: item.channels?.[0]?.name || '', game: game.key,
-  })).filter(item => item.id && item.name)
+  })).filter(item => item.id && item.name && item.channelId && !/攻略|一图流|配队|养成/.test(item.fullName))
   cache.searches.set(cacheKey, { time: Date.now(), items })
   return items
 }
@@ -213,6 +221,8 @@ async function searchRemote(game, keyword) {
 export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}) {
   const game = gameOf(key)
   const text = String(keyword || '').trim()
+  const names = aliasNames(key, text)
+  const searchText = names.length === 1 ? names[0] : text
   if (!game || !text) return []
   const collected = new Map()
   const add = item => {
@@ -225,7 +235,7 @@ export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}
     const channel = (await channelsOf(key)).find(item => item.id === channelId)
     if (channel) for (const item of await listItems(game, channel)) add(item)
   } else {
-    try { for (const item of await searchRemote(game, text)) add(item) }
+    try { for (const item of await searchRemote(game, searchText)) add(item) }
     catch (err) { logger.warn(`[${game.name}图鉴] 搜索失败，改用目录:`, err.message || err) }
     if (!collected.size) {
       const lists = await Promise.all((await channelsOf(key)).map(item => listItems(game, item).catch(() => [])))
@@ -581,10 +591,22 @@ function entriesFromHtml(html) {
 }
 
 const MEDIA = {
-  sr: { id: '2391', kind: 'emoji', name: '表情包' },
-  zzz: { id: '688', kind: 'wallpaper', name: '壁纸' },
+  sr: {
+    id: '2391', kind: 'emoji', name: '表情包',
+    videos: [
+      { id: 27, name: '角色视频' },
+      { id: 196, name: '其他视频' },
+    ],
+  },
+  zzz: {
+    id: '688', kind: 'wallpaper', name: '壁纸',
+    videos: [
+      { id: 73, name: '角色视频' },
+      { id: 72, name: '其他视频' },
+    ],
+  },
   ys: {
-    kind: 'video', name: '影音回廊',
+    kind: 'video', name: '影音',
     groups: [
       { id: 212, name: '角色视频' },
       { id: 81, name: '过场动画' },
@@ -608,6 +630,9 @@ export async function mediaGroups(key) {
   if (spec.kind === 'video') {
     const lists = await Promise.all(spec.groups.map(group => listMedia(game, group)))
     items = lists.flat()
+  } else if (spec.videos) {
+    const lists = await Promise.all(spec.videos.map(group => listMedia(game, group)))
+    items = lists.flat()
   } else {
     const page = await mediaPage(key, spec.id)
     items = imageGroups(page).map(group => ({ id: group.name, name: group.name, count: group.images.length }))
@@ -624,19 +649,27 @@ export async function mediaImages(key, name) {
 }
 
 export async function mediaVideos(key, keyword = '') {
+  const spec = MEDIA[key]
   const items = await mediaGroups(key)
   const text = String(keyword || '').trim()
-  const group = MEDIA[key].groups.find(item => item.name === text)
+  const groups = spec.groups || spec.videos || []
+  const group = groups.find(item => item.name === text)
   const matched = items.filter(item => group ? item.group === group.name : item.name.includes(text) || item.group.includes(text))
-  if (group || matched.length > 6) return { total: matched.length, names: matched.slice(0, 12).map(item => item.name), clips: [] }
-  const clips = []
-  for (const item of matched) {
-    const page = await mediaPage(key, item.id)
-    const html = JSON.stringify(page || {})
-    const src = [...html.matchAll(/https?:\\?\/\\?\/[^"'\\\s]+?\.mp4/gi)].map(match => match[0].replace(/\\\//g, '/'))[0] || ''
-    if (src) clips.push({ name: item.name.replace(/^(过场动画|剧情PV|版本PV)[-—：:\s]*/, ''), src, group: item.group })
+  return { total: matched.length, items: matched }
+}
+
+export async function mediaClip(key, id) {
+  const item = (await mediaGroups(key)).find(entry => entry.id === String(id))
+  if (!item) return null
+  const post = String(item.bbs || '').match(/article\/(\d+)/)?.[1] || ''
+  if (post) {
+    const src = await resolveVideo(key, post)
+    return src ? { ...item, src } : null
   }
-  return { total: matched.length, names: [], clips }
+  const page = await mediaPage(key, item.id)
+  const html = JSON.stringify(page || {})
+  const src = [...html.matchAll(/https?:\\?\/\\?\/[^"'\\\s]+?\.mp4/gi)].map(match => match[0].replace(/\\\//g, '/'))[0] || ''
+  return src ? { ...item, src } : null
 }
 
 async function listMedia(game, group) {
@@ -649,7 +682,10 @@ async function listMedia(game, group) {
     const rows = (data?.list || []).flatMap(row => row.list || [])
     const fresh = rows.filter(item => !items.some(saved => saved.id === String(item.content_id)))
     if (!fresh.length) break
-    items.push(...fresh.map(item => ({ id: String(item.content_id), name: item.title, group: group.name })))
+    items.push(...fresh.map(item => ({
+      id: String(item.content_id), name: item.title, group: group.name,
+      cover: item.icon || '', summary: item.summary || '', bbs: item.bbs_url || '',
+    })))
     if (fresh.length < rows.length || rows.length < 50) break
   }
   return items

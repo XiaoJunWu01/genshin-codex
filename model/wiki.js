@@ -1,3 +1,4 @@
+import { aliasNames } from './alias.js'
 const LIST_BASE = 'https://act-api-takumi-static.mihoyo.com'
 const ENTRY_BASE = 'https://api-takumi-static.mihoyo.com'
 const API_BASE = 'https://act-api-takumi.mihoyo.com'
@@ -193,7 +194,8 @@ for (const table of [CHARACTER_ALIASES, ENTRY_ALIASES]) {
 }
 
 function aliasTargets(keyword) {
-  return ALIAS_INDEX.get(normalizeName(keyword)) || []
+  const local = ALIAS_INDEX.get(normalizeName(keyword)) || []
+  return [...new Set([...local, ...aliasNames('gs', keyword)])]
 }
 
 async function requestJson(url) {
@@ -312,8 +314,7 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
   }
 
   const mapped = aliasTargets(text)
-  const characterOnly = channelId === 25
-  const searchText = characterOnly && mapped.length === 1 ? mapped[0] : text
+  const searchText = channelId && mapped.length === 1 ? mapped[0] : text
 
   if (channelId) {
     for (const item of await getChannelItems(channelId)) add(item)
@@ -546,7 +547,7 @@ export function parseWikiQuery(input = '') {
       continue
     }
     const matched = findWikiChannel(token)
-    if (matched && !channel) {
+    if (matched && !channel && words.length) {
       channel = matched
       continue
     }
