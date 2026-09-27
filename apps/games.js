@@ -21,6 +21,7 @@ import {
   channelOf, channelPattern, focusOf, gameOf,
   getGameEntry, listGame, mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
+import { clipText } from '../model/wiki.js'
 import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -48,18 +49,18 @@ const LAYOUT = {
   },
 }
 const OVERVIEW = {
-  sr: new Set(['profile', 'trace', 'eidolon']),
-  zzz: new Set(['profile', 'skill', 'cinema']),
+  sr: new Set(['profile', 'ascension', 'set']),
+  zzz: new Set(['profile', 'ascension']),
 }
-const OVERVIEW_LIMIT = { trace: 8, skill: 8, eidolon: 6, cinema: 6 }
 const GAME_CSS = `
 .board{display:grid;gap:8px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
-.group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:13px;font-weight:800}
-.tile{min-width:0;padding:10px 12px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
-.tile>div{display:flex;align-items:center;gap:8px}.tile .icons{display:flex;gap:3px;flex-shrink:0}
-.tile img{width:36px;height:36px;object-fit:contain;border-radius:8px;background:#fff}
-.tile b{color:var(--ink);font-size:14px;line-height:1.4}
-.tile p{margin-top:6px;color:#475569;font-size:13px;line-height:1.65;word-break:break-word}
+.group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:17px;font-weight:800}
+.tile{min-width:0;padding:14px 16px;border-radius:14px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.tile>div{display:flex;align-items:center;gap:10px}.tile .icons{display:flex;gap:4px;flex-shrink:0}
+.tile img{width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff}
+.tile b{color:var(--ink);font-size:18px;line-height:1.4}
+.tile p{margin-top:6px;color:#475569;font-size:16px;line-height:1.6;word-break:break-word}
+.tile p b{color:var(--accent)}
 .hero.art{align-items:flex-end}.hero.art .splash{width:180px;height:240px;object-fit:contain;object-position:center bottom;border-radius:16px;background:transparent}
 `
 
@@ -68,7 +69,7 @@ function escapeHtml(value) {
 }
 
 function textBlock(value) {
-  return escapeHtml(value).replace(/\n/g, '<br>')
+  return escapeHtml(value).replace(/\n/g, '<br>').replace(/(\d+(?:\.\d+)?%?)/g, '<b>$1</b>')
 }
 
 function commandOf(text) {
@@ -159,19 +160,21 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       .map(([label, value]) => `<span><em>${label}</em><b>${escapeHtml(value)}</b></span>`).join('')
     const used = new Set((THEMES[key]?.(entry) || []).map(([, value]) => value))
     const tags = (entry.tags || []).filter(tag => !used.has(tag)).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
-    const source = focus
-      ? entry.parts?.[focus.id] || []
-      : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus))
+    const source = focus?.id === 'detail'
+      ? entry.all || entry.sections || []
+      : (focus
+        ? entry.parts?.[focus.id] || []
+        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)))
     const sections = source.map(section => {
-      const shown = !focus && OVERVIEW_LIMIT[section.focus] ? { ...section, cards: section.cards.slice(0, OVERVIEW_LIMIT[section.focus]) } : section
+      const shown = !focus && section.focus === 'profile' ? { ...section, text: clipText(section.text || '', 90) } : section
       const layout = LAYOUT[key]?.[section.focus] || { columns: 2, showIcon: true }
       const cards = boardHtml(shown.cards, layout)
       return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${textBlock(shown.text)}</p>` : ''}${groupsHtml(shown.groups)}${cards}</section>`
     }).join('')
-    const links = !focus && entry.parts ? Object.keys(entry.parts).map(id => focusOf(key, id)?.name).filter(Boolean) : []
+    const links = !focus || focus.id === 'detail' ? Object.keys(entry.parts || {}).map(id => focusOf(key, id)?.name).filter(Boolean) : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''
-    const title = focus ? `${entry.name} · ${focus.name}` : entry.name
-    const splash = !focus && entry.theme?.portrait ? `<img class="splash" src="${escapeHtml(entry.theme.portrait)}" alt="">` : ''
+    const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
+    const splash = focus?.id === 'detail' || !entry.theme?.portrait ? '' : `<img class="splash" src="${escapeHtml(entry.theme.portrait)}" alt="">`
     return `<div class="hero${splash ? ' art' : ''}">${splash || icon}<div><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${sections}${more}`
   }
 
@@ -287,7 +290,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const entry = await getGameEntry(key, target.id, target)
     if (focus?.id === 'portrait') return this.sendPortraits(e, entry)
     if (focus?.id === 'video') return this.sendVideos(e, key, entry)
-    const source = focus ? entry.parts?.[focus.id] || [] : entry.sections || []
+    const source = focus?.id === 'detail' ? entry.sections || [] : (focus ? entry.parts?.[focus.id] || [] : entry.sections || [])
     if (focus && !source.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。`)
       return true

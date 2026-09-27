@@ -44,7 +44,7 @@ function escapeHtml(value) {
 }
 
 function textBlock(value) {
-  return escapeHtml(value).replace(/\n/g, '<br>')
+  return escapeHtml(value).replace(/\n/g, '<br>').replace(/(\d+(?:\.\d+)?%?)/g, '<b>$1</b>')
 }
 
 function runGit(args) {
@@ -158,50 +158,52 @@ export function groupsHtml(groups, total = []) {
   return rows || summary ? `<div class="levels">${rows}${summary}</div>` : ''
 }
 
-export const resultCss = '.results{display:flex;flex-direction:column;gap:8px}.result{display:flex;align-items:center;gap:12px;padding:10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}.result img,.placeholder{width:48px;height:48px;border-radius:12px;object-fit:cover;background:#f1f5f9;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:15px}.result span{display:inline-block;margin-top:3px;padding:1px 7px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:12px}.result em{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#64748b;font-style:normal;font-size:12px;line-height:1.5}'
+export const resultCss = '.results{display:flex;flex-direction:column;gap:10px}.result{display:flex;align-items:center;gap:14px;padding:14px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:14px;border-left:5px solid var(--accent)}.result img,.placeholder{width:60px;height:60px;border-radius:14px;object-fit:cover;background:#f1f5f9;flex-shrink:0}.result b{display:block;color:#1e293b;font-size:20px}.result span{display:inline-block;margin-top:4px;padding:2px 10px;border-radius:999px;background:var(--soft);color:var(--accent);font-size:15px;font-weight:700}.result em{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px;color:#64748b;font-style:normal;font-size:15px;line-height:1.5}'
 
 export const entryCss = `
 .hero{display:flex;gap:16px;align-items:center;padding:16px;border:1px solid rgba(15,23,42,.08);border-radius:16px;background:linear-gradient(135deg,#fff,var(--soft))}
 .cover{width:92px;height:92px;object-fit:contain;border-radius:20px;background:radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);border:1px solid rgba(15,23,42,.06);flex-shrink:0}
-.hero h2{color:var(--ink);font-size:30px;line-height:1.1}
-.facts{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.facts span{min-width:64px;padding:5px 9px;border-radius:10px;background:#fff;border:1px solid rgba(15,23,42,.06);border-top:3px solid var(--accent)}
-.facts em{display:block;color:#64748b;font-style:normal;font-size:11px}
-.facts b{color:var(--ink);font-size:15px}
+.hero h2{color:var(--ink);font-size:34px;line-height:1.15}
+.facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+.facts span{min-width:84px;padding:7px 12px;border-radius:12px;background:#fff;border:1px solid rgba(15,23,42,.06);border-top:4px solid var(--accent)}
+.facts em{display:block;color:#64748b;font-style:normal;font-size:14px}
+.facts b{color:var(--ink);font-size:20px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.tags span{padding:2px 8px;border-radius:999px;background:var(--accent);color:#fff;font-size:12px}
+.tags span{padding:4px 12px;border-radius:999px;background:var(--accent);color:#fff;font-size:15px;font-weight:700}
 .attrs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
-.attrs div{padding:8px 10px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:12px;border-left:4px solid var(--accent)}
-.attrs em{display:block;color:#64748b;font-style:normal;font-size:12px}
-.attrs b{color:var(--ink);font-size:14px;line-height:1.45}
+.attrs div{padding:11px 14px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:14px;border-left:5px solid var(--accent)}
+.attrs em{display:block;color:var(--accent);font-style:normal;font-size:15px;font-weight:800}
+.attrs b{color:var(--ink);font-size:20px;line-height:1.45}
 section{margin-top:10px;padding:12px;border:1px solid rgba(15,23,42,.08);border-radius:14px;background:#fff}
-section h3{display:flex;align-items:center;gap:8px;margin-bottom:8px;color:var(--ink);font-size:15px}
+section h3{display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--ink);font-size:22px}
 section h3::before{content:\"\";width:4px;height:14px;border-radius:4px;background:var(--accent)}
-section p{color:#334155;font-size:14px;line-height:1.7;word-break:break-word}
+section p{color:#334155;font-size:18px;line-height:1.75;word-break:break-word}
+section p b{color:var(--accent)}
 .levels{display:flex;flex-direction:column;gap:6px}
 .level{padding:8px;border-radius:10px;background:var(--soft)}
-.level>b{display:block;margin-bottom:6px;color:var(--ink);font-size:13px}
+.level>b{display:block;margin-bottom:8px;color:var(--accent);font-size:17px}
 .level>div{display:flex;flex-wrap:wrap;gap:6px}
 .mat{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:2px 8px 2px 2px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.06)}
-.mat img{width:24px;height:24px;object-fit:contain;border-radius:50%;background:var(--soft)}
-.mat em{color:#334155;font-style:normal;font-size:12px}
-.mat b{color:var(--accent);font-size:12px}
-.level small{display:block;margin-top:5px;color:#64748b;font-size:12px;line-height:1.5}
+.mat img{width:32px;height:32px;object-fit:contain;border-radius:50%;background:var(--soft)}
+.mat em{color:var(--ink);font-style:normal;font-size:16px;font-weight:700}
+.mat b{color:var(--accent);font-size:16px}
+.level small{display:block;margin-top:6px;color:#475569;font-size:15px;line-height:1.55}
+.level small b{color:var(--accent)}
 .total{background:#fff;border:1px dashed var(--accent)}
 .equips{display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.group{grid-column:1/-1;margin-top:2px;color:var(--accent);font-size:13px;font-weight:800}
-.equip{display:flex;align-items:flex-start;gap:8px;min-height:72px;padding:8px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
-.equip .icons{display:flex;gap:3px;flex-shrink:0}
-.equip .icons img,.equip>img,.equip>.placeholder{width:46px;height:46px;object-fit:contain;border-radius:10px;background:#fff}
-.equip b{display:block;color:var(--ink);font-size:13px;line-height:1.35}
-.equip p{display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;margin-top:3px;color:#475569;font-size:12px;line-height:1.55}
+.group{grid-column:1/-1;margin-top:2px;color:var(--accent);font-size:17px;font-weight:800}
+.equip{display:flex;align-items:center;gap:10px;min-height:64px;padding:12px;border-radius:14px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.equip .icons{display:flex;gap:4px;flex-shrink:0}
+.equip .icons img,.equip>img,.equip>.placeholder{width:52px;height:52px;object-fit:contain;border-radius:12px;background:#fff}
+.equip b{display:block;color:var(--ink);font-size:18px;line-height:1.35}
+.equip p{margin-top:4px;color:#475569;font-size:15px;line-height:1.5}
 .more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding:10px;border-radius:12px;background:var(--soft)}
-.more em{color:#64748b;font-style:normal;font-size:12px}
-.more span{padding:4px 8px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:12px}
+.more em{color:#64748b;font-style:normal;font-size:15px}
+.more span{padding:6px 12px;border-radius:999px;background:#fff;border:1px solid rgba(15,23,42,.08);color:var(--accent);font-size:16px;font-weight:700}
 .gallery{display:flex;flex-direction:column;gap:10px}
 .shot{padding:8px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .shot img{display:block;width:100%;max-height:760px;object-fit:contain;border-radius:10px;background:#fff}
-.shot b{display:block;margin-top:6px;color:var(--ink);font-size:13px;text-align:center}
+.shot b{display:block;margin-top:6px;color:var(--ink);font-size:16px;text-align:center}
 .motions{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .motions .shot img{max-height:240px}
 `
@@ -517,15 +519,25 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const tags = (entry.tags || []).filter(tag => ![theme.element, theme.weapon, theme.rarity].includes(tag))
       .map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
     const attrs = !focus || focus.id === 'profile'
-      ? (entry.attrs || []).map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
+      ? (entry.attrs || []).filter(attr => focus || !/描述|故事|简介/.test(attr.key))
+        .map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
       : ''
-    const source = focus ? (entry.parts?.[focus.id] || []) : (entry.sections || [])
+    const brief = section => {
+      if (focus) return section
+      if (/推荐/.test(section.title)) return { ...section, cards: (section.cards || []).map(card => ({ ...card, text: '' })) }
+      if (section.focus === 'profile') return { ...section, text: clipText(section.text || '', 90) }
+      return section
+    }
+    const source = focus?.id === 'detail'
+      ? (entry.all || entry.sections || [])
+      : (focus ? (entry.parts?.[focus.id] || []) : (entry.sections || []))
     const sections = source.map(section => {
-      const pictures = imagesHtml(section.images, section.focus === 'showcase')
-      return `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}${groupsHtml(section.groups, section.total)}${pictures}</section>`
+      const shown = brief(section)
+      const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${textBlock(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${pictures}</section>`
     }).join('')
-    const title = focus ? `${entry.name} · ${focus.name}` : entry.name
-    const links = focus ? '' : this.focusLinks(entry)
+    const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
+    const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)
     return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}${links}`
   }
 
@@ -575,7 +587,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }
       return this.showVideoPage(e, clips, entry.name, 1)
     }
-    const part = focus ? entry.parts?.[focus.id] || [] : null
+    const part = focus?.id === 'detail' ? null : (focus ? entry.parts?.[focus.id] || [] : null)
     if (focus && !part.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #角色 ${entry.name}`)
       return

@@ -66,6 +66,7 @@ export const GAME_FOCUS = {
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
     { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
+    { id: 'detail', name: '全文', aliases: ['全文', '详细', '详情'] },
   ],
   zzz: [
     { id: 'skill', name: '技能', aliases: ['技能'] },
@@ -75,6 +76,7 @@ export const GAME_FOCUS = {
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
     { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
+    { id: 'detail', name: '全文', aliases: ['全文', '详细', '详情'] },
   ],
 }
 
@@ -351,12 +353,13 @@ function formatCharacter(game, content) {
     const [key, ...rest] = line.split('：')
     return { key, value: rest.join('：') }
   })
-  const overview = sections.filter(item => !/画廊|语音|推荐|攻略|解析|考据/.test(item.title) && item.focus !== 'story')
+  const overview = sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus))
   return {
     id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
     theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '', portrait: portraits[0]?.src || '' },
     sections: overview.slice(0, 6),
+    all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts, url: `${game.site}/content/${content.id}/detail`,
   }
 }
@@ -401,7 +404,8 @@ function formatTabs(game, content) {
     id: String(content.id), name: shortName(content.title) || '未命名词条', icon: content.icon || '',
     tags: attrs.map(item => item.value), attrs,
     theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度'), portrait: portraits[0]?.src || '' },
-    sections: sections.slice(0, 5), motions, portraits, videos: [], parts,
+    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 4),
+    all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'), motions, portraits, videos: [], parts,
     url: `${game.site}/content/${content.id}/detail`,
   }
 }
@@ -512,7 +516,8 @@ function formatWiki(game, page) {
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
     theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营'), portrait: portraits[0]?.src || '' },
     filters: {},
-    sections: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait').slice(0, 5),
+    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 5),
+    all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts,
     url: `${game.site}/content/${page.id}/detail`,
   }

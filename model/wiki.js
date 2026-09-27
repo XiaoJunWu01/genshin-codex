@@ -214,6 +214,7 @@ export const WIKI_FOCUS = [
   { id: 'profile', name: '资料', aliases: ['资料', '属性', '档案', '信息'] },
   { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
   { id: 'showcase', name: '展示', aliases: ['展示', '角色展示', '动作', '待机'] },
+  { id: 'detail', name: '全文', aliases: ['全文', '详细', '详情'] },
 ]
 
 export const WIKI_FOCUS_PATTERN = WIKI_FOCUS
@@ -993,7 +994,7 @@ function headerFrom(page) {
   }
 }
 
-const PRIORITY = ['装备描述', '基础信息', '物品描述', '基础属性', '圣遗物件', '成长数值', '角色突破', '推荐装备', '天赋', '命之座', '推荐角色', '特殊料理']
+const BRIEF = /基础资料|基础属性|物品描述|装备描述|圣遗物|推荐装备|推荐角色|特殊料理|突破|成长数值|升级材料/
 const STORY_TITLE = /故事|神之眼|更多描述|角色详细|角色CV|配音/
 const PROFILE_TITLE = /基础资料|基础信息|基础属性|物品描述|装备描述/
 const ASCENSION_TITLE = /突破|成长数值|升级材料/
@@ -1032,11 +1033,7 @@ export function formatWikiEntry(page) {
     }
   }
 
-  pending.sort((a, b) => {
-    const ai = PRIORITY.indexOf(a.title)
-    const bi = PRIORITY.indexOf(b.title)
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
-  })
+  pending.sort((a, b) => (BRIEF.test(b.title) ? 1 : 0) - (BRIEF.test(a.title) ? 1 : 0))
   const ordered = [
     ...pending.filter(item => item.focus !== 'story'),
     ...pending.filter(item => item.focus === 'story'),
@@ -1081,9 +1078,7 @@ export function formatWikiEntry(page) {
   const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
   const videos = sections.flatMap(section => section.videos || [])
   const character = isCharacterPage(page)
-  const overview = character
-    ? sections.filter(section => /推荐装备|特殊料理|圣遗物|基础资料/.test(section.title)).slice(0, 4)
-    : sections.filter(section => !STORY_TITLE.test(section.title) && section.focus !== 'video').slice(0, 5)
+  const overview = sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 5)
 
   return {
     id: String(page.id),
@@ -1093,10 +1088,11 @@ export function formatWikiEntry(page) {
     attrs: header.attrs,
     theme: { ...header.theme, portrait: portraits[0]?.src || '' },
     sections: overview,
+    all: sections.filter(section => section.focus !== 'video' && section.focus !== 'portrait' && section.focus !== 'showcase'),
     portraits,
     motions,
     videos,
-    parts: character ? {
+    parts: {
       talent: sections.filter(section => section.focus === 'talent'),
       constellation: sections.filter(section => section.focus === 'constellation'),
       ascension: sections.filter(section => section.focus === 'ascension'),
@@ -1104,7 +1100,7 @@ export function formatWikiEntry(page) {
       profile: sections.filter(section => section.focus === 'profile'),
       portrait: sections.filter(section => section.focus === 'portrait'),
       showcase: sections.filter(section => section.focus === 'showcase'),
-    } : {},
+    },
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
 }
