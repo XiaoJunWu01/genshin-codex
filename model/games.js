@@ -580,34 +580,111 @@ function entriesFromHtml(html) {
   })).filter(item => item.name)
 }
 
-const EMOJI_CHANNELS = { sr: 223, zzz: 74, ys: 268 }
+const MEDIA = {
+  sr: { id: '2391', kind: 'emoji', name: '表情包' },
+  zzz: { id: '688', kind: 'wallpaper', name: '壁纸' },
+  ys: {
+    kind: 'video', name: '影音回廊',
+    groups: [
+      { id: 212, name: '角色视频' },
+      { id: 81, name: '过场动画' },
+      { id: 238, name: '其他视频' },
+    ],
+  },
+}
 const GAME_IDS = { sr: '6', zzz: '8', ys: '2' }
 
-export async function emojiPacks(key) {
+export function mediaOf(key) {
+  return MEDIA[key] || null
+}
+
+export async function mediaGroups(key) {
+  const spec = MEDIA[key]
   const game = gameOf(key)
-  const channel = EMOJI_CHANNELS[key]
-  if (!game || !channel) return []
-  const cached = cache.lists.get(`${key}:emoji`)
+  if (!spec || !game) return []
+  const cached = cache.lists.get(`${key}:media`)
   if (cached && Date.now() - cached.time < LIST_TTL) return cached.items
-  const data = await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/home/content/list?app_sn=${game.app}&channel_id=${channel}`)
-  const items = (data?.list || []).flatMap(group => group.list || [])
-    .filter(item => item?.content_id && item?.title)
-    .map(item => ({ id: String(item.content_id), name: item.title, icon: item.icon || '' }))
-  cache.lists.set(`${key}:emoji`, { time: Date.now(), items })
+  let items = []
+  if (spec.kind === 'video') {
+    const lists = await Promise.all(spec.groups.map(group => listMedia(game, group)))
+    items = lists.flat()
+  } else {
+    const page = await mediaPage(key, spec.id)
+    items = imageGroups(page).map(group => ({ id: group.name, name: group.name, count: group.images.length }))
+  }
+  cache.lists.set(`${key}:media`, { time: Date.now(), items })
   return items
 }
 
-export async function emojiImages(key, id) {
+export async function mediaImages(key, name) {
+  const spec = MEDIA[key]
+  const groups = imageGroups(await mediaPage(key, spec.id))
+  const found = groups.find(group => group.name === name) || groups.find(group => group.name.includes(name))
+  return found?.images || []
+}
+
+export async function mediaVideos(key, keyword = '') {
+  const items = await mediaGroups(key)
+  const text = String(keyword || '').trim()
+  const group = MEDIA[key].groups.find(item => item.name === text)
+  const matched = items.filter(item => group ? item.group === group.name : item.name.includes(text) || item.group.includes(text))
+  if (group || matched.length > 6) return { total: matched.length, names: matched.slice(0, 12).map(item => item.name), clips: [] }
+  const clips = []
+  for (const item of matched) {
+    const page = await mediaPage(key, item.id)
+    const html = JSON.stringify(page || {})
+    const src = [...html.matchAll(/https?:\\?\/\\?\/[^"'\\\s]+?\.mp4/gi)].map(match => match[0].replace(/\\\//g, '/'))[0] || ''
+    if (src) clips.push({ name: item.name.replace(/^(过场动画|剧情PV|版本PV)[-—：:\s]*/, ''), src, group: item.group })
+  }
+  return { total: matched.length, names: [], clips }
+}
+
+async function listMedia(game, group) {
+  const items = []
+  for (let page = 1; page <= 30; page += 1) {
+    let data = null
+    try {
+      data = await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/home/content/list?app_sn=${game.app}&channel_id=${group.id}&page=${page}&page_size=50`)
+    } catch { break }
+    const rows = (data?.list || []).flatMap(row => row.list || [])
+    const fresh = rows.filter(item => !items.some(saved => saved.id === String(item.content_id)))
+    if (!fresh.length) break
+    items.push(...fresh.map(item => ({ id: String(item.content_id), name: item.title, group: group.name })))
+    if (fresh.length < rows.length || rows.length < 50) break
+  }
+  return items
+}
+
+async function mediaPage(key, id) {
   const game = gameOf(key)
-  const data = key === 'ys'
-    ? await requestJson(game, `${ENTRY_BASE}/hoyowiki/genshin/wapi/entry_page?app_sn=${game.app}&entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`)
-    : key === 'zzz'
-      ? await requestJson(game, `${ENTRY_BASE}/hoyowiki/wapi/entry_page?entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`)
-      : await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/content/info?app_sn=${game.app}&content_id=${encodeURIComponent(id)}`)
-  const page = data?.page || data?.content
-  const text = JSON.stringify(page || {})
-  return [...new Set([...text.matchAll(/https?:\\?\/\\?\/[^"'\\\s]+?\.(?:png|jpg|jpeg|gif|webp)/gi)].map(item => item[0].replace(/\\\//g, '/')))]
-    .filter(src => !/icon|avatar/i.test(src)).slice(0, 40)
+  if (key === 'ys') return (await requestJson(game, `https://api-takumi-static.mihoyo.com/hoyowiki/genshin/wapi/entry_page?app_sn=${game.app}&entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`))?.page
+  if (key === 'zzz') return (await requestJson(game, `${ENTRY_BASE}/hoyowiki/wapi/entry_page?entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`))?.page
+  return (await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/content/info?app_sn=${game.app}&content_id=${encodeURIComponent(id)}`))?.content
+}
+
+function imageGroups(page) {
+  const html = page?.contents ? (page.contents || []).map(tab => tab.text || '').join('\n') : ''
+  if (html) {
+    const images = [...html.matchAll(/<img[^>]+src="([^"]+\.(?:png|jpg|jpeg|gif|webp))"/gi)]
+      .map(item => item[1]).filter(src => !/icon|avatar/i.test(src))
+    const size = 24
+    return Array.from({ length: Math.ceil(images.length / size) }, (_, index) => ({
+      name: `第${index + 1}组`,
+      images: images.slice(index * size, index * size + size),
+    }))
+  }
+  const groups = new Map()
+  for (const module of page?.modules || []) {
+    for (const component of module.components || []) {
+      for (const item of parseJson(component.data, {}).list || []) {
+        const name = textOf(item.tab_name)
+        if (!name || name === '默认标题' || !item.image || MOTION.test(item.image)) continue
+        if (!groups.has(name)) groups.set(name, [])
+        groups.get(name).push(item.image)
+      }
+    }
+  }
+  return [...groups.entries()].map(([name, images]) => ({ name, images }))
 }
 
 export async function resolveVideo(key, page) {

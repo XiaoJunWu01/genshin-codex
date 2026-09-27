@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { emojiImages, emojiPacks } from '../model/games.js'
+import { mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
   WIKI_FOCUS,
@@ -216,8 +216,8 @@ export default class WikiPlugin extends plugin {
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
-        { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo' },
-        { reg: `^${lead}表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
+        { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo', priority: 40 },
+        { reg: `^${lead}(?:影音|影音回廊|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
         { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
@@ -312,14 +312,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#g装扮 名字', '装扮和幻形', '饰'],
         ['#g灰眸 标识', '灰眸和组织', '眸'],
         ['#gNPC 叶尔莫莱', 'NPC 和商店', '人'],
-        ['g表情包', '米游社表情，转发逐张发送', '表'],
+        ['g影音', '角色视频、过场动画、其他视频', '影'],
       ]],
       ['原神 · g', [
         ['#g图鉴目录', '全部分类和筛选', '目'],
         ['#g图鉴目录 角色 火 五星', '元素、地区、星级、武器', '筛'],
         ['#g图鉴日历', '未来 7 天生日和材料', '历'],
         ['#g图鉴今天', '只看今天', '今'],
-        ...(e.isMaster ? [['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'], ['#图鉴更新', '主人更新插件', '新']] : []),
       ]],
       ['星穹铁道 · s', [
         ['s流萤', '立绘、资料、行迹和星魂', 's'],
@@ -337,8 +336,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['z突破 妮可', '突破材料和信赖奖励', '突'],
         ['z视频 妮可', '角色视频和游戏视频', '影'],
         ['z音擎 聚宝箱', '音擎和突破材料', '擎'],
-        ['z表情包', '米游社表情包', '表'],
+        ['z壁纸', '节日和版本壁纸', '纸'],
       ]],
+      ...(e.isMaster ? [['主人设置', [
+        ['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'],
+        ['#图鉴视频关', '关闭视频解析', '关'],
+        ['#图鉴更新', '拉取插件更新', '新'],
+      ]]] : []),
     ]
     const body = `<div class="help">
       <div class="mast">
@@ -585,6 +589,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async toggleVideo(e) {
+    if (!e.isMaster) return false
     const matched = String(e.msg || '').match(new RegExp(`^${lead}图鉴视频(?:\\s*(开|关))?$`))
     const key = this.sessionKey(e)
     const next = matched?.[1] ? matched[1] === '开' : !this.videoOn(e)
@@ -595,28 +600,31 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return true
   }
 
-  async emoji(e) {
-    const keyword = String(e.msg || '').replace(/^#?g?\s*表情包\s*/, '').trim()
+  async gallery(e) {
+    const raw = String(e.msg || '').replace(/^#?g?\s*/, '')
+    const kind = raw.startsWith('过场动画') ? '过场动画' : raw.startsWith('其他视频') ? '其他视频' : ''
+    const keyword = raw.replace(/^(?:影音回廊|影音|过场动画|其他视频)\s*/, '').trim() || kind
     try {
-      const packs = await emojiPacks('ys')
-      const chosen = keyword ? packs.find(item => item.name === keyword) || packs.find(item => item.name.includes(keyword)) : null
-      if (!chosen) {
-        await e.reply(['原神表情包', ...packs.slice(0, 20).map(item => `g表情包 ${item.name}`), packs.length > 20 ? `还有 ${packs.length - 20} 套` : ''].filter(Boolean).join('\n'))
+      if (!keyword) {
+        const items = await mediaGroups('ys')
+        const count = name => items.filter(item => item.group === name).length
+        await e.reply(['原神影音回廊', `g过场动画（${count('过场动画')}）`, `g其他视频（${count('其他视频')}）`, `角色视频 ${count('角色视频')} 条，发送 g角色视频 名字`].join('\n'))
         return true
       }
-      const images = await emojiImages('ys', chosen.id)
-      if (!images.length) {
-        await e.reply(`「${chosen.name}」没有可发送的表情。`)
+      const result = await mediaVideos('ys', keyword)
+      if (result.names?.length) {
+        await e.reply([`找到 ${result.total} 条，写出名字再发送：`, ...result.names.map(name => `g影音 ${name}`), result.total > result.names.length ? `还有 ${result.total - result.names.length} 条` : ''].filter(Boolean).join('\n'))
         return true
       }
-      if (!e.group?.makeForwardMsg) {
-        await e.reply([chosen.name, ...images.slice(0, 20).map(src => segment.image(src))])
+      if (!result.clips.length) {
+        await e.reply(`影音回廊没有找到「${keyword}」。`)
         return true
       }
-      await e.reply(await e.group.makeForwardMsg(images.slice(0, 30).map(src => ({ message: segment.image(src), nickname: chosen.name, user_id: 10000 }))))
+      const more = result.total > result.clips.length ? `\n还有 ${result.total - result.clips.length} 条，把名字写完整再查。` : ''
+      await e.reply([...result.clips.flatMap(item => [`${item.group} · ${item.name}`, segment.video(item.src)]), more].filter(Boolean))
     } catch (err) {
-      logger.error('[原神表情包]', err)
-      await e.reply('表情包获取失败，请稍后重试')
+      logger.error('[原神影音]', err)
+      await e.reply('影音回廊获取失败，请稍后重试')
     }
     return true
   }

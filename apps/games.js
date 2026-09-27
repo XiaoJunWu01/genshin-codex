@@ -18,8 +18,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import {
-  channelOf, channelPattern, emojiImages, emojiPacks, focusOf, gameOf,
-  getGameEntry, listGame, resolveVideo, searchGame,
+  channelOf, channelPattern, focusOf, gameOf,
+  getGameEntry, listGame, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
 import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
@@ -100,10 +100,10 @@ export default class GameWikiPlugin extends plugin {
       rule: [
         { reg: `^#?[${letters}](?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^#?[${letters}](?![a-z#])\\s*\\S+`, fnc: 'query' },
-        { reg: `^#?[${letters}](?![a-z#])表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
+        { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^(?:#|g)?(?:${words})(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^(?:#|g)?(?:${words})\\s*\\S+`, fnc: 'query' },
-        { reg: `^(?:#|g)?(?:${words})表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
+        { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
       ],
     })
   }
@@ -187,8 +187,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (command.rest && command.rest !== '帮助') return false
     const game = gameOf(command.key)
     const lines = command.key === 'sr'
-      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's视频 流萤', 's光锥 记一位友人', 's表情包']
-      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z视频 妮可', 'z音擎 聚宝箱', 'z表情包']
+      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's视频 流萤', 's表情包']
+      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z视频 妮可', 'z壁纸']
     await e.reply([`${game.name}图鉴（${mark(game)} 前缀）`, ...lines].join('\n'))
     return true
   }
@@ -334,34 +334,45 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return true
   }
 
-  async emoji(e) {
+  async gallery(e) {
     const command = commandOf(e.msg)
     const game = gameOf(command.key)
-    const keyword = command.rest.replace(/^表情包/, '').trim()
+    const spec = mediaOf(command.key)
+    const keyword = command.rest.replace(/^(?:表情包|壁纸)/, '').trim()
+    if (spec?.kind === 'wallpaper' && /表情包/.test(command.rest)) {
+      await e.reply(`${game.name}没有表情包收录，发送 ${mark(game)}壁纸 查看壁纸。`)
+      return true
+    }
+    if (spec?.kind === 'emoji' && /壁纸/.test(command.rest)) {
+      await e.reply(`${game.name}的收录是表情包，发送 ${mark(game)}表情包。`)
+      return true
+    }
     try {
-      const packs = await emojiPacks(command.key)
-      const chosen = keyword ? packs.find(item => item.name === keyword) || packs.find(item => item.name.includes(keyword)) : null
+      const groups = await mediaGroups(command.key)
+      const chosen = keyword ? groups.find(item => item.name === keyword) || groups.find(item => item.name.includes(keyword)) : null
       if (!chosen) {
-        await e.reply([`${game.name}表情包`, ...packs.slice(0, 20).map(item => `${mark(game)}表情包 ${item.name}`), packs.length > 20 ? `还有 ${packs.length - 20} 套` : ''].filter(Boolean).join('\n'))
+        await e.reply([`${game.name}${spec.name}`, ...groups.slice(0, 20).map(item => `${mark(game)}${spec.name} ${item.name}`)].join('\n'))
         return true
       }
-      const images = await emojiImages(command.key, chosen.id)
+      const images = await mediaImages(command.key, chosen.name)
       if (!images.length) {
-        await e.reply(`「${chosen.name}」没有可发送的表情。`)
+        await e.reply(`「${chosen.name}」没有可发送的图片。`)
         return true
       }
-      if (!e.group?.makeForwardMsg) {
-        await e.reply([chosen.name, ...images.slice(0, 20).map(src => segment.image(src))])
-        return true
-      }
-      const forward = await e.group.makeForwardMsg(images.slice(0, 30).map(src => ({
-        message: segment.image(src), nickname: chosen.name, user_id: 10000,
-      })))
-      await e.reply(forward)
+      await this.forwardImages(e, chosen.name, images)
     } catch (err) {
-      logger.error(`[${game.name}表情包]`, err)
-      await e.reply('表情包获取失败，请稍后重试')
+      logger.error(`[${game.name}${spec?.name || '图集'}]`, err)
+      await e.reply('图片获取失败，请稍后重试')
     }
     return true
+  }
+
+  async forwardImages(e, name, images) {
+    const shown = images.slice(0, 30)
+    if (!e.group?.makeForwardMsg) {
+      await e.reply([name, ...shown.map(src => segment.image(src))])
+      return
+    }
+    await e.reply(await e.group.makeForwardMsg(shown.map(src => ({ message: segment.image(src), nickname: name, user_id: 10000 }))))
   }
 }
