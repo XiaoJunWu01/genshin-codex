@@ -1,4 +1,23 @@
 import plugin from '../../../lib/plugins/plugin.js'
+function clip(value, limit) {
+  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
+  return text.length > limit ? text.slice(0, limit) + '…' : text
+}
+
+function boardHtml(cards, { columns = 2, clamp = 3, showIcon = true } = {}) {
+  const items = cards || []
+  if (!items.length) return ''
+  return `<div class="board cols-${columns}">${items.map((card, index) => {
+    const group = card.group && card.group !== items[index - 1]?.group
+      ? `<div class="group">${escapeHtml(card.group)}</div>` : ''
+    const icons = showIcon ? (card.icons?.length ? card.icons : [card.icon]).filter(Boolean) : []
+    const icon = icons.length
+      ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>` : ''
+    const text = card.text ? `<p>${textBlock(clip(card.text, clamp > 4 ? 180 : 96))}</p>` : ''
+    return `${group}<article class="${icon ? 'tile' : 'tile plain'}"><div>${icon}<b>${escapeHtml(card.name || '')}</b></div>${text}</article>`
+  }).join('')}</div>`
+}
+
 import puppeteer from '../../../lib/puppeteer/puppeteer.js'
 import fs from 'fs'
 import path from 'path'
@@ -7,7 +26,7 @@ import {
   channelOf, channelPattern, focusOf, gameOf,
   getGameEntry, listGame, searchGame,
 } from '../model/games.js'
-import { cardsHtml, entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
+import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sessions = new Map()
@@ -19,6 +38,34 @@ const THEMES = {
   sr: entry => [['属性', entry.theme.element], ['命途', entry.theme.path], ['星级', entry.theme.rarity]],
   zzz: entry => [['属性', entry.theme.element], ['特性', entry.theme.weapon], ['稀有度', entry.theme.rarity], ['阵营', entry.theme.faction]],
 }
+const LAYOUT = {
+  sr: {
+    trace: { columns: 1, clamp: 4, showIcon: false },
+    eidolon: { columns: 1, clamp: 5, showIcon: false },
+    skill: { columns: 1, clamp: 4, showIcon: false },
+    effect: { columns: 1, clamp: 8, showIcon: false },
+  },
+  zzz: {
+    skill: { columns: 1, clamp: 3, showIcon: false },
+    cinema: { columns: 2, clamp: 3, showIcon: false },
+    disk: { columns: 1, clamp: 4, showIcon: false },
+    story: { columns: 1, clamp: 6, showIcon: false },
+  },
+}
+const OVERVIEW = {
+  sr: new Set(['profile', 'trace', 'eidolon', 'effect', 'set']),
+  zzz: new Set(['profile', 'skill', 'cinema']),
+}
+const GAME_CSS = `
+.board{display:grid;gap:8px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
+.group{grid-column:1/-1;color:var(--accent);font-size:13px;font-weight:800}
+.tile{min-width:0;padding:10px 12px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.tile>div{display:flex;align-items:flex-start;gap:8px}.tile .icons{display:flex;gap:3px;flex-shrink:0}
+.tile img{width:36px;height:36px;object-fit:contain;border-radius:8px;background:#fff}
+.tile b{color:var(--ink);font-size:14px;line-height:1.4}
+.tile p{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px;color:#475569;font-size:12px;line-height:1.55}
+.cols-1 .tile p{-webkit-line-clamp:4}.cols-2 .tile p{-webkit-line-clamp:3}
+`
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
@@ -114,8 +161,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       .map(([label, value]) => `<span><em>${label}</em><b>${escapeHtml(value)}</b></span>`).join('')
     const used = new Set((THEMES[key]?.(entry) || []).map(([, value]) => value))
     const tags = (entry.tags || []).filter(tag => !used.has(tag)).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
-    const source = focus ? entry.parts?.[focus.id] || [] : entry.sections || []
-    const sections = source.map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups)}${cardsHtml(section.cards)}</section>`).join('')
+    const source = focus
+      ? entry.parts?.[focus.id] || []
+      : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus))
+    const sections = source.map(section => {
+      const layout = LAYOUT[key]?.[section.focus] || { columns: 2, clamp: 3, showIcon: true }
+      const cards = boardHtml(section.cards, layout)
+      return `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups)}${cards}</section>`
+    }).join('')
     const links = !focus && entry.parts ? Object.keys(entry.parts).map(id => focusOf(key, id)?.name).filter(Boolean) : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''
     const title = focus ? `${entry.name} · ${focus.name}` : entry.name
@@ -220,7 +273,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       body: this.entryHtml(key, entry, focus),
       footer: `数据来源：米游社${game.name}图鉴`,
       theme: themeOf(entry),
-      extraCss: entryCss,
+      extraCss: entryCss + GAME_CSS,
     }), lines.join('\n'))
     if (!focus && entry.motions?.length) await this.sendMotions(e, entry)
     return true

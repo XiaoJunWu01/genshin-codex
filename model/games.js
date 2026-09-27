@@ -292,7 +292,7 @@ function formatCharacter(game, content) {
         const cards = (data.points || []).flatMap(point => (point.subList || []).map(item => ({
           name: textOf(item.subTitle || item.title), text: stripHtml(item.subDesc || item.desc), icon: stillOf(item.image),
         }))).filter(item => item.name && item.text)
-        remember(sections, parts, section(module.name, [], cards.slice(0, 8), 'trace'))
+        remember(sections, parts, section(module.name, [], cards.slice(0, 4), 'trace'))
       } else if (component.componentId === 'character_rich') {
         const focus = /星魂/.test(module.name) ? 'eidolon' : /故事|语音|关系/.test(module.name) ? 'story' : ''
         const cards = cardsFromHtml(data.richText)
@@ -408,7 +408,7 @@ function formatWiki(game, page) {
         for (const item of (data.list || []).flatMap(group => group.children || [])) {
           if (motionOf(item.animated_icon)) motions.push({ name: textOf(item.title) || '技能', src: item.animated_icon })
         }
-        remember(sections, parts, section(title || '技能', [], cards.slice(0, 8), 'skill'))
+        remember(sections, parts, section(title || '技能', [], cards.slice(0, 4), 'skill'))
       } else if (id === 'role_ascension') {
         const groups = (data.list || []).map(level => ({
           name: textOf(level.tab_name),
@@ -424,7 +424,7 @@ function formatWiki(game, page) {
         const cards = tableCards(data)
         const sample = cards.slice(0, 2).map(item => item.name).join(' ')
         const focus = /影画/.test(title) || /^LEVEL\s?\d/i.test(sample) ? 'cinema' : /故事|印象|CV/.test(title) ? 'story' : ''
-        remember(sections, parts, section(named(title, focus === 'cinema' ? '影画' : '详情'), [], cards.slice(0, focus === 'cinema' ? 6 : 8), focus))
+        remember(sections, parts, section(named(title, focus === 'cinema' ? '影画' : '详情'), [], cards.slice(0, focus === 'cinema' ? 4 : 6), focus))
       } else if (id === 'collapse_panel' || id === 'good_desc' || id === 'map_desc') {
         const focus = /故事|印象|CV/.test(title) ? 'story' : ''
         const cards = cardsFromHtml(data.rich_text)
@@ -448,7 +448,7 @@ function formatWiki(game, page) {
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
     theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营') },
     filters: {},
-    sections: sections.filter(item => item.focus !== 'story').slice(0, 6),
+    sections: sections.filter(item => item.focus !== 'story').slice(0, 4),
     motions, parts,
     url: `${game.site}/content/${page.id}/detail`,
   }
