@@ -53,15 +53,15 @@ const OVERVIEW = {
   zzz: new Set(['profile', 'ascension']),
 }
 const GAME_CSS = `
-.board{display:grid;gap:8px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
-.group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:17px;font-weight:800}
-.tile{min-width:0;padding:14px 16px;border-radius:14px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
-.tile>div{display:flex;align-items:center;gap:10px}.tile .icons{display:flex;gap:4px;flex-shrink:0}
-.tile img{width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff}
-.tile b{color:var(--accent);font-size:18px;line-height:1.4}
-.tile p{margin-top:6px;color:#475569;font-size:16px;line-height:1.6;word-break:break-word}
+.board{display:grid;gap:12px}.board.cols-2{grid-template-columns:1fr}.board.cols-1{grid-template-columns:1fr}
+.group{grid-column:1/-1;margin-top:6px;color:var(--accent);font-size:26px;font-weight:800}
+.tile{min-width:0;padding:18px 20px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.tile>div{display:flex;align-items:center;gap:16px}.tile .icons{display:flex;gap:8px;flex-shrink:0}
+.tile img{width:96px;height:96px;object-fit:contain;border-radius:18px;background:#fff}
+.tile b{color:var(--accent);font-size:28px;line-height:1.4}
+.tile p{margin-top:8px;color:#475569;font-size:24px;line-height:1.6;word-break:break-word}
 .tile p b{color:var(--accent)}
-.hero.art{align-items:flex-end}.hero.art .splash{width:180px;height:240px;object-fit:contain;object-position:center bottom;border-radius:16px;background:transparent}
+.hero.art{align-items:flex-end}.hero.art .splash{width:280px;height:360px;object-fit:contain;object-position:center bottom;border-radius:20px;background:transparent}
 `
 
 function escapeHtml(value) {
@@ -127,10 +127,10 @@ export default class GameWikiPlugin extends plugin {
 *{margin:0;padding:0;box-sizing:border-box}html,body{overflow:hidden}
 body{display:inline-block;font-family:"Microsoft YaHei","PingFang SC","Noto Sans SC",sans-serif;background:transparent}
 .page{display:inline-block;background:linear-gradient(145deg,${palette.soft} 0%,${palette.color} 140%);padding:18px}
-.container{--accent:${palette.color};--soft:${palette.soft};--ink:${palette.ink};width:760px;padding:16px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.7);border-radius:22px}
-.header{display:${theme ? 'none' : 'block'};margin-bottom:12px;padding:12px 14px;border-radius:14px;background:linear-gradient(135deg,var(--soft),#fff)}
-.header h1{font-size:22px;color:var(--ink)}.subtitle{margin-top:3px;color:#64748b;font-size:13px}
-.footer{margin-top:12px;padding:8px 12px;border-radius:12px;background:var(--soft);text-align:center;color:#64748b;font-size:12px}
+.container{--accent:${palette.color};--soft:${palette.soft};--ink:${palette.ink};width:1080px;padding:28px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.7);border-radius:28px}
+.header{display:${theme ? 'none' : 'block'};margin-bottom:16px;padding:16px 20px;border-radius:18px;background:linear-gradient(135deg,var(--soft),#fff)}
+.header h1{font-size:34px;color:var(--ink)}.subtitle{margin-top:6px;color:#64748b;font-size:20px}
+.footer{margin-top:16px;padding:12px 16px;border-radius:16px;background:var(--soft);text-align:center;color:#64748b;font-size:18px}
 ${extraCss || ''}
 </style></head><body><div class="page"><div class="container">
 <div class="header"><h1>${escapeHtml(title)}</h1><div class="subtitle">${escapeHtml(subtitle || '')}</div></div>
