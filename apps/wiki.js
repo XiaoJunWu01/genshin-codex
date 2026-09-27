@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
+import { emojiImages, emojiPacks } from '../model/games.js'
 import {
   WIKI_CHANNELS,
   WIKI_FOCUS,
@@ -216,6 +217,7 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
         { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo' },
+        { reg: `^${lead}表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
         { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
@@ -273,12 +275,12 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const bg = getBackgroundImageUrl()
     const groups = [
       ['查询', [
-        ['#角色 胡桃', '角色资料、天赋、命座和突破', '角'],
+        ['#g角色 胡桃', '角色资料、天赋、命座和突破', '角'],
         ['g薇纳斯', '名字一致时直接出图', '查'],
-        ['#蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
-        ['胡桃立绘', '全身立绘原图', '绘'],
-        ['胡桃动作', '待机和技能动图', '动'],
-        ['#图鉴 银釭', '按关键字搜索全部词条', '搜'],
+        ['g蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
+        ['g胡桃立绘', '全身立绘原图', '绘'],
+        ['g胡桃动作', '待机和技能动图', '动'],
+        ['g图鉴 银釭', '按关键字搜索全部词条', '搜'],
       ]],
       ['角色分项', [
         ['#g天赋 胡桃', '天赋全文和升级材料', '天'],
@@ -289,49 +291,53 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#图鉴2', '打开上一次结果的第 2 条', '页'],
       ]],
       ['养成与世界', [
-        ['#武器 狼的末路', '武器属性和突破材料', '武'],
-        ['#圣遗物 饰金', '套装效果和推荐角色', '圣'],
-        ['#敌人 丘丘人', '敌人资料', '敌'],
-        ['#食物 甜甜花酿鸡', '食谱材料和食用效果', '食'],
-        ['#材料 霓裳花', '材料来源和用途', '材'],
-        ['#动物 虹晶星花鱼', '动物和生物', '兽'],
+        ['#g武器 狼的末路', '武器属性和突破材料', '武'],
+        ['#g圣遗物 饰金', '套装效果和推荐角色', '圣'],
+        ['#g敌人 丘丘人', '敌人资料', '敌'],
+        ['#g食物 甜甜花酿鸡', '食谱材料和食用效果', '食'],
+        ['#g材料 霓裳花', '材料来源和用途', '材'],
+        ['#g动物 虹晶星花鱼', '动物和生物', '兽'],
       ]],
       ['内容与终局', [
-        ['#成就 无束的残月', '成就达成条件', '成'],
-        ['#任务 至冬宫的来信', '魔神、传说和世界任务', '任'],
-        ['#委托 兽内不和', '冒险家协会每日委托', '委'],
-        ['#秘境 荒坠的圣迹', '秘境和洞天', '境'],
-        ['#深渊 深境螺旋第8层', '深渊、剧诗和危战', '渊'],
-        ['#行动牌 七循之理', '七圣召唤卡牌', '牌'],
+        ['#g成就 无束的残月', '成就达成条件', '成'],
+        ['#g任务 至冬宫的来信', '魔神、传说和世界任务', '任'],
+        ['#g委托 兽内不和', '冒险家协会每日委托', '委'],
+        ['#g秘境 荒坠的圣迹', '秘境和洞天', '境'],
+        ['#g深渊 深境螺旋第8层', '深渊、剧诗和危战', '渊'],
+        ['#g行动牌 七循之理', '七圣召唤卡牌', '牌'],
       ]],
       ['收集与装扮', [
-        ['#名片 原神·印象', '名片原图', '片'],
-        ['#头像 锋锐', '头像', '像'],
-        ['#装扮 名字', '装扮和幻形', '饰'],
-        ['#灰眸 标识', '灰眸和组织', '眸'],
-        ['#NPC 叶尔莫莱', 'NPC 和商店', '人'],
-        ['#活动 名字', '活动和供奉', '活'],
+        ['#g名片 原神·印象', '名片原图', '片'],
+        ['#g头像 锋锐', '头像', '像'],
+        ['#g装扮 名字', '装扮和幻形', '饰'],
+        ['#g灰眸 标识', '灰眸和组织', '眸'],
+        ['#gNPC 叶尔莫莱', 'NPC 和商店', '人'],
+        ['g表情包', '米游社表情，转发逐张发送', '表'],
       ]],
-      ['目录、日历和设置', [
-        ['#图鉴目录', '全部分类和筛选', '目'],
-        ['#图鉴目录 角色 火 五星', '元素、地区、星级、武器', '筛'],
-        ['#图鉴日历', '未来 7 天生日和材料', '历'],
-        ['#图鉴今天', '只看今天', '今'],
-        ['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'],
-        ...(e.isMaster ? [['#图鉴更新', '主人更新插件', '新']] : []),
+      ['原神 · g', [
+        ['#g图鉴目录', '全部分类和筛选', '目'],
+        ['#g图鉴目录 角色 火 五星', '元素、地区、星级、武器', '筛'],
+        ['#g图鉴日历', '未来 7 天生日和材料', '历'],
+        ['#g图鉴今天', '只看今天', '今'],
+        ...(e.isMaster ? [['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'], ['#图鉴更新', '主人更新插件', '新']] : []),
       ]],
       ['星穹铁道 · s', [
-        ['s流萤', '角色资料、行迹和星魂', 's'],
-        ['s光锥 记一位友人', '光锥', '锥'],
-        ['s遗器 宝命长存的莳者', '遗器', '器'],
-        ['s行迹 流萤', '行迹和星魂', '迹'],
+        ['s流萤', '立绘、资料、行迹和星魂', 's'],
+        ['s行迹 流萤', '行迹全文', '迹'],
+        ['s星魂 流萤', '六条星魂', '魂'],
+        ['s晋阶 流萤', '晋阶材料和满级属性', '阶'],
+        ['s视频 流萤', '角色 PV、动画和剧情 CG', '影'],
+        ['s光锥 记一位友人', '光锥效果和晋阶材料', '锥'],
+        ['s表情包', '米游社表情包', '表'],
       ]],
       ['绝区零 · z', [
-        ['z妮可', '代理人资料、技能和影画', 'z'],
+        ['z妮可', '立绘、技能和影画', 'z'],
+        ['z技能 妮可', '技能全文', '技'],
+        ['z影画 妮可', '代理人影画', '画'],
+        ['z突破 妮可', '突破材料和信赖奖励', '突'],
+        ['z视频 妮可', '角色视频和游戏视频', '影'],
         ['z音擎 聚宝箱', '音擎和突破材料', '擎'],
-        ['z邦布 艾米莉安', '邦布', '布'],
-        ['z驱动盘 荆棘玫瑰', '套装效果和词条', '盘'],
-        ['z技能 妮可', '技能、影画和突破', '技'],
+        ['z表情包', '米游社表情包', '表'],
       ]],
     ]
     const body = `<div class="help">
@@ -346,7 +352,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         <h2>${title}</h2>
         <div class="grid">${items.map(([cmd, desc, mark]) => `<div class="cell"><i>${mark}</i><div><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">原神用 # 或 g；星铁用 s，绝区零用 z。空格可有可无</div>
+      <div class="foot">原神 g，星铁 s，绝区零 z。空格可有可无。设置类指令只在主人的帮助里显示</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
@@ -586,6 +592,32 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     await e.reply(next
       ? '已开启本插件的角色视频解析。查询角色视频词条时会直接发视频，其他链接仍不处理。'
       : '已关闭角色视频解析。')
+    return true
+  }
+
+  async emoji(e) {
+    const keyword = String(e.msg || '').replace(/^#?g?\s*表情包\s*/, '').trim()
+    try {
+      const packs = await emojiPacks('ys')
+      const chosen = keyword ? packs.find(item => item.name === keyword) || packs.find(item => item.name.includes(keyword)) : null
+      if (!chosen) {
+        await e.reply(['原神表情包', ...packs.slice(0, 20).map(item => `g表情包 ${item.name}`), packs.length > 20 ? `还有 ${packs.length - 20} 套` : ''].filter(Boolean).join('\n'))
+        return true
+      }
+      const images = await emojiImages('ys', chosen.id)
+      if (!images.length) {
+        await e.reply(`「${chosen.name}」没有可发送的表情。`)
+        return true
+      }
+      if (!e.group?.makeForwardMsg) {
+        await e.reply([chosen.name, ...images.slice(0, 20).map(src => segment.image(src))])
+        return true
+      }
+      await e.reply(await e.group.makeForwardMsg(images.slice(0, 30).map(src => ({ message: segment.image(src), nickname: chosen.name, user_id: 10000 }))))
+    } catch (err) {
+      logger.error('[原神表情包]', err)
+      await e.reply('表情包获取失败，请稍后重试')
+    }
     return true
   }
 

@@ -1,10 +1,5 @@
 import plugin from '../../../lib/plugins/plugin.js'
-function clip(value, limit) {
-  const text = String(value ?? '').replace(/\s+/g, ' ').trim()
-  return text.length > limit ? text.slice(0, limit) + '…' : text
-}
-
-function boardHtml(cards, { columns = 2, clamp = 3, showIcon = true } = {}) {
+function boardHtml(cards, { columns = 2, showIcon = true } = {}) {
   const items = cards || []
   if (!items.length) return ''
   return `<div class="board cols-${columns}">${items.map((card, index) => {
@@ -13,7 +8,7 @@ function boardHtml(cards, { columns = 2, clamp = 3, showIcon = true } = {}) {
     const icons = showIcon ? (card.icons?.length ? card.icons : [card.icon]).filter(Boolean) : []
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>` : ''
-    const text = card.text ? `<p>${textBlock(clip(card.text, clamp > 4 ? 180 : 96))}</p>` : ''
+    const text = card.text ? `<p>${textBlock(card.text)}</p>` : ''
     return `${group}<article class="${icon ? 'tile' : 'tile plain'}"><div>${icon}<b>${escapeHtml(card.name || '')}</b></div>${text}</article>`
   }).join('')}</div>`
 }
@@ -23,8 +18,8 @@ import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
 import {
-  channelOf, channelPattern, focusOf, gameOf,
-  getGameEntry, listGame, searchGame,
+  channelOf, channelPattern, emojiImages, emojiPacks, focusOf, gameOf,
+  getGameEntry, listGame, resolveVideo, searchGame,
 } from '../model/games.js'
 import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
@@ -40,31 +35,32 @@ const THEMES = {
 }
 const LAYOUT = {
   sr: {
-    trace: { columns: 1, clamp: 4, showIcon: false },
-    eidolon: { columns: 1, clamp: 5, showIcon: false },
-    skill: { columns: 1, clamp: 4, showIcon: false },
-    effect: { columns: 1, clamp: 8, showIcon: false },
+    trace: { columns: 1, showIcon: true },
+    eidolon: { columns: 2, showIcon: true },
+    skill: { columns: 1, showIcon: true },
+    effect: { columns: 1, showIcon: false },
   },
   zzz: {
-    skill: { columns: 1, clamp: 3, showIcon: false },
-    cinema: { columns: 2, clamp: 3, showIcon: false },
-    disk: { columns: 1, clamp: 4, showIcon: false },
-    story: { columns: 1, clamp: 6, showIcon: false },
+    skill: { columns: 1, showIcon: true },
+    cinema: { columns: 2, showIcon: false },
+    disk: { columns: 1, showIcon: false },
+    story: { columns: 1, showIcon: false },
   },
 }
 const OVERVIEW = {
-  sr: new Set(['profile', 'trace', 'eidolon', 'effect', 'set']),
+  sr: new Set(['profile', 'trace', 'eidolon']),
   zzz: new Set(['profile', 'skill', 'cinema']),
 }
+const OVERVIEW_LIMIT = { trace: 8, skill: 8, eidolon: 6, cinema: 6 }
 const GAME_CSS = `
 .board{display:grid;gap:8px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
-.group{grid-column:1/-1;color:var(--accent);font-size:13px;font-weight:800}
+.group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:13px;font-weight:800}
 .tile{min-width:0;padding:10px 12px;border-radius:12px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
-.tile>div{display:flex;align-items:flex-start;gap:8px}.tile .icons{display:flex;gap:3px;flex-shrink:0}
+.tile>div{display:flex;align-items:center;gap:8px}.tile .icons{display:flex;gap:3px;flex-shrink:0}
 .tile img{width:36px;height:36px;object-fit:contain;border-radius:8px;background:#fff}
 .tile b{color:var(--ink);font-size:14px;line-height:1.4}
-.tile p{display:-webkit-box;-webkit-box-orient:vertical;overflow:hidden;margin-top:4px;color:#475569;font-size:12px;line-height:1.55}
-.cols-1 .tile p{-webkit-line-clamp:4}.cols-2 .tile p{-webkit-line-clamp:3}
+.tile p{margin-top:6px;color:#475569;font-size:13px;line-height:1.65;word-break:break-word}
+.hero.art{align-items:flex-end}.hero.art .splash{width:180px;height:240px;object-fit:contain;object-position:center bottom;border-radius:16px;background:transparent}
 `
 
 function escapeHtml(value) {
@@ -104,8 +100,10 @@ export default class GameWikiPlugin extends plugin {
       rule: [
         { reg: `^#?[${letters}](?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^#?[${letters}](?![a-z#])\\s*\\S+`, fnc: 'query' },
+        { reg: `^#?[${letters}](?![a-z#])表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
         { reg: `^(?:#|g)?(?:${words})(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^(?:#|g)?(?:${words})\\s*\\S+`, fnc: 'query' },
+        { reg: `^(?:#|g)?(?:${words})表情包(?:\\s*\\S+)?$`, fnc: 'emoji' },
       ],
     })
   }
@@ -165,14 +163,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ? entry.parts?.[focus.id] || []
       : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus))
     const sections = source.map(section => {
-      const layout = LAYOUT[key]?.[section.focus] || { columns: 2, clamp: 3, showIcon: true }
-      const cards = boardHtml(section.cards, layout)
-      return `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups)}${cards}</section>`
+      const shown = !focus && OVERVIEW_LIMIT[section.focus] ? { ...section, cards: section.cards.slice(0, OVERVIEW_LIMIT[section.focus]) } : section
+      const layout = LAYOUT[key]?.[section.focus] || { columns: 2, showIcon: true }
+      const cards = boardHtml(shown.cards, layout)
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${textBlock(shown.text)}</p>` : ''}${groupsHtml(shown.groups)}${cards}</section>`
     }).join('')
     const links = !focus && entry.parts ? Object.keys(entry.parts).map(id => focusOf(key, id)?.name).filter(Boolean) : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''
     const title = focus ? `${entry.name} · ${focus.name}` : entry.name
-    return `<div class="hero">${icon}<div><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${sections}${more}`
+    const splash = !focus && entry.theme?.portrait ? `<img class="splash" src="${escapeHtml(entry.theme.portrait)}" alt="">` : ''
+    return `<div class="hero${splash ? ' art' : ''}">${splash || icon}<div><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${sections}${more}`
   }
 
   resultHtml(results) {
@@ -187,8 +187,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (command.rest && command.rest !== '帮助') return false
     const game = gameOf(command.key)
     const lines = command.key === 'sr'
-      ? ['s流萤', 's角色 流萤', 's行迹 流萤', 's星魂 流萤', 's光锥 记一位友人', 's遗器 宝命长存的莳者']
-      : ['z妮可', 'z代理人 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z音擎 聚宝箱', 'z驱动盘 荆棘玫瑰', 'z邦布 艾米莉安']
+      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's视频 流萤', 's光锥 记一位友人', 's表情包']
+      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z视频 妮可', 'z音擎 聚宝箱', 'z表情包']
     await e.reply([`${game.name}图鉴（${mark(game)} 前缀）`, ...lines].join('\n'))
     return true
   }
@@ -260,6 +260,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async show(e, key, target, focus) {
     const game = gameOf(key)
     const entry = await getGameEntry(key, target.id, target)
+    if (focus?.id === 'portrait') return this.sendPortraits(e, entry)
+    if (focus?.id === 'video') return this.sendVideos(e, key, entry)
     const source = focus ? entry.parts?.[focus.id] || [] : entry.sections || []
     if (focus && !source.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。`)
@@ -297,5 +299,69 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       if (author && typeof author === 'object' && ('name' in author || 'uin' in author || 'avatar' in author)) author.avatar = icon
     }
     await e.reply(forward)
+  }
+
+  async sendPortraits(e, entry) {
+    const pictures = entry.portraits?.length ? entry.portraits : (entry.theme?.portrait ? [{ src: entry.theme.portrait, name: entry.name }] : [])
+    if (!pictures.length) {
+      await e.reply(`「${entry.name}」还没有立绘。`)
+      return true
+    }
+    await e.reply(pictures.flatMap(item => [item.name && pictures.length > 1 ? item.name : '', segment.image(item.src)].filter(Boolean)))
+    return true
+  }
+
+  async sendVideos(e, key, entry) {
+    const clips = entry.videos || []
+    if (!clips.length) {
+      await e.reply(`「${entry.name}」没有收录视频。`)
+      return true
+    }
+    const nodes = []
+    for (const clip of clips.slice(0, 8)) {
+      try {
+        const src = await resolveVideo(key, clip.page)
+        if (src) nodes.push({ name: clip.name || '视频', src })
+      } catch (err) {
+        logger.warn('[图鉴视频]', err)
+      }
+    }
+    if (!nodes.length) {
+      await e.reply(`${entry.name}的视频暂时无法播放。`)
+      return true
+    }
+    await e.reply(nodes.flatMap(item => [item.name, segment.video(item.src)]))
+    return true
+  }
+
+  async emoji(e) {
+    const command = commandOf(e.msg)
+    const game = gameOf(command.key)
+    const keyword = command.rest.replace(/^表情包/, '').trim()
+    try {
+      const packs = await emojiPacks(command.key)
+      const chosen = keyword ? packs.find(item => item.name === keyword) || packs.find(item => item.name.includes(keyword)) : null
+      if (!chosen) {
+        await e.reply([`${game.name}表情包`, ...packs.slice(0, 20).map(item => `${mark(game)}表情包 ${item.name}`), packs.length > 20 ? `还有 ${packs.length - 20} 套` : ''].filter(Boolean).join('\n'))
+        return true
+      }
+      const images = await emojiImages(command.key, chosen.id)
+      if (!images.length) {
+        await e.reply(`「${chosen.name}」没有可发送的表情。`)
+        return true
+      }
+      if (!e.group?.makeForwardMsg) {
+        await e.reply([chosen.name, ...images.slice(0, 20).map(src => segment.image(src))])
+        return true
+      }
+      const forward = await e.group.makeForwardMsg(images.slice(0, 30).map(src => ({
+        message: segment.image(src), nickname: chosen.name, user_id: 10000,
+      })))
+      await e.reply(forward)
+    } catch (err) {
+      logger.error(`[${game.name}表情包]`, err)
+      await e.reply('表情包获取失败，请稍后重试')
+    }
+    return true
   }
 }

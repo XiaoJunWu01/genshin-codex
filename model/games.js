@@ -13,6 +13,11 @@ const GAMES = {
     referer: 'https://baike.mihoyo.com/zzz/wiki/',
     site: 'https://baike.mihoyo.com/zzz/wiki', detail: 'wiki',
   },
+  ys: {
+    key: 'ys', name: '原神', short: '原神', letter: 'g', app: 'ys_obc',
+    referer: 'https://baike.mihoyo.com/',
+    site: 'https://baike.mihoyo.com/ys/wiki', detail: 'genshin',
+  },
 }
 
 const CHANNEL_ALIASES = {
@@ -54,16 +59,21 @@ export const GAME_FOCUS = {
   sr: [
     { id: 'trace', name: '行迹', aliases: ['行迹', '技能'] },
     { id: 'eidolon', name: '星魂', aliases: ['星魂'] },
+    { id: 'ascension', name: '晋阶', aliases: ['晋阶', '突破', '养成', '材料'] },
     { id: 'effect', name: '效果', aliases: ['效果'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
+    { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
+    { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
   ],
   zzz: [
     { id: 'skill', name: '技能', aliases: ['技能'] },
     { id: 'cinema', name: '影画', aliases: ['影画'] },
-    { id: 'ascension', name: '突破', aliases: ['突破', '养成'] },
+    { id: 'ascension', name: '突破', aliases: ['突破', '养成', '材料'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
+    { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
+    { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
   ],
 }
 
@@ -130,6 +140,10 @@ function normalizeName(value) {
   return stripHtml(value).replace(/[【】\[\]()（）·\s]/g, '').toLowerCase()
 }
 
+function shortName(value) {
+  return stripHtml(value).replace(/[（(][^）)]*[）)]/g, '').split(/[·:：]/)[0].trim()
+}
+
 function parseItemFilters(value) {
   const ext = parseJson(value, {})
   const bag = Object.values(ext || {}).map(item => item?.filter?.text).find(Boolean)
@@ -156,7 +170,7 @@ async function listItems(game, channel) {
     for (const item of group.list || []) {
       if (!item?.content_id || !item?.title) continue
       items.push({
-        id: String(item.content_id), name: item.title, icon: item.icon || '',
+        id: String(item.content_id), name: shortName(item.title), fullName: item.title, icon: item.icon || '',
         alias: stripHtml(item.alias_name || ''), summary: stripHtml(item.summary || ''),
         channelId: channel.id, channelName: channel.name,
         filters: parseItemFilters(item.ext), game: game.key,
@@ -171,13 +185,14 @@ function scoreItem(item, keyword) {
   const query = normalizeName(keyword)
   const rank = value => {
     const text = normalizeName(value)
+    const head = normalizeName(shortName(value))
     if (!text) return 0
-    if (text === query) return 100
+    if (text === query || head === query) return 100
     if (text.startsWith(query)) return 80
     if (text.includes(query)) return 60
     return 0
   }
-  return Math.max(rank(item.name), rank(item.alias))
+  return Math.max(rank(item.name), rank(item.fullName), rank(item.alias))
 }
 
 async function searchRemote(game, keyword) {
@@ -186,7 +201,7 @@ async function searchRemote(game, keyword) {
   if (cached && Date.now() - cached.time < CACHE_TTL) return cached.items
   const data = await requestJson(game, `${SEARCH_BASE}/common/blackboard/${game.app}/v1/search/content?keyword=${encodeURIComponent(keyword)}&app_sn=${game.app}&page_size=8`)
   const items = (data?.list || []).map(item => ({
-    id: String(item.id), name: stripHtml(item.title), icon: item.icon || '',
+    id: String(item.id), name: shortName(item.title), fullName: stripHtml(item.title), icon: item.icon || '',
     summary: stripHtml(item.summary || ''),
     channelId: Number(item.channels?.[0]?.channel_id || 0),
     channelName: item.channels?.[0]?.name || '', game: game.key,
@@ -233,12 +248,14 @@ function textOf(value) {
   return stripHtml(value).replace(/\s+/g, ' ').trim()
 }
 
-function section(title, lines = [], cards = [], focus = '', groups = []) {
+function section(title, lines = [], cards = [], focus = '', groups = [], images = [], videos = []) {
   const text = lines.map(textOf).filter(Boolean)
   const list = cards.filter(card => card?.name || card?.text)
   const levels = groups.filter(group => group?.materials?.length || group?.note)
-  if (!text.length && !list.length && !levels.length) return null
-  return { title, text: text.join('\n'), lines: text, cards: list, groups: levels, images: [], videos: [], focus }
+  const shots = images.filter(item => item?.src)
+  const clips = videos.filter(item => item?.page || item?.src)
+  if (!text.length && !list.length && !levels.length && !shots.length && !clips.length) return null
+  return { title, text: text.join('\n'), lines: text, cards: list, groups: levels, images: shots, videos: clips, focus }
 }
 
 function cardsFromHtml(html) {
@@ -282,21 +299,40 @@ function formatCharacter(game, content) {
   const sections = []
   const parts = {}
   const motions = []
+  const portraits = []
+  const videos = []
+  if (info.figurePath) portraits.push({ name: '角色立绘', src: info.figurePath })
   for (const module of body.modules || []) {
     for (const component of module.components || []) {
       const data = parseJson(component.data, {})
       if (component.componentId === 'character_info') {
         const lines = (data.list || []).map(item => [item.rightKey, item.rightValue].filter(Boolean).join('：'))
         remember(sections, parts, section(module.name, lines, [], 'profile'))
+      } else if (component.componentId === 'role_ascension') {
+        remember(sections, parts, section(module.name || '角色晋阶', [], [], 'ascension', ascensionGroups(data.list)))
       } else if (component.componentId === 'trace_graph') {
-        const cards = (data.points || []).flatMap(point => (point.subList || []).map(item => ({
-          name: textOf(item.subTitle || item.title), text: stripHtml(item.subDesc || item.desc), icon: stillOf(item.image),
-        }))).filter(item => item.name && item.text)
-        remember(sections, parts, section(module.name, [], cards.slice(0, 4), 'trace'))
+        const cards = (data.points || []).flatMap(point => {
+          const group = textOf(point.tag || point.name)
+          return (point.subList || []).map(item => ({
+            name: textOf(item.subTitle) || textOf(point.name).split('/')[0],
+            text: stripHtml(item.subDesc || item.desc),
+            icon: stillOf(item.image),
+            group,
+          }))
+        }).filter(item => item.name && item.text)
+        const skills = cards.filter(card => /普攻|战技|终结技|天赋|秘技|额外能力/.test(card.group))
+        const rest = cards.filter(card => !skills.includes(card))
+        remember(sections, parts, section(module.name || '角色行迹', [], [...skills, ...rest], 'trace'))
       } else if (component.componentId === 'character_rich') {
         const focus = /星魂/.test(module.name) ? 'eidolon' : /故事|语音|关系/.test(module.name) ? 'story' : ''
         const cards = cardsFromHtml(data.richText)
-        remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, 8), focus) : section(module.name, [data.richText], [], focus))
+        const limit = focus === 'eidolon' ? cards.length : /推荐/.test(module.name) ? 4 : 8
+        remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, [data.richText], [], focus))
+      } else if (component.componentId === 'character_story') {
+        const lines = (data.list || []).map(item => [textOf(item.tabName), textOf(item.desc)].filter(Boolean).join('\n'))
+        remember(sections, parts, section(module.name || '角色故事', lines, [], 'story'))
+      } else if (component.componentId === 'character_gallery') {
+        collectGallery(data, portraits, videos)
       }
     }
   }
@@ -305,12 +341,13 @@ function formatCharacter(game, content) {
     const [key, ...rest] = line.split('：')
     return { key, value: rest.join('：') }
   })
+  const overview = sections.filter(item => !/画廊|语音|推荐|攻略|解析|考据/.test(item.title) && item.focus !== 'story')
   return {
-    id: String(content.id), name: content.title || info.name || '未命名词条',
+    id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
-    theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '' },
-    sections: sections.filter(item => !/画廊|语音/.test(item.title)).slice(0, 5),
-    motions, parts, url: `${game.site}/content/${content.id}/detail`,
+    theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '', portrait: portraits[0]?.src || '' },
+    sections: overview.slice(0, 6),
+    motions, portraits, videos, parts, url: `${game.site}/content/${content.id}/detail`,
   }
 }
 
@@ -318,6 +355,7 @@ function formatTabs(game, content) {
   const sections = []
   const parts = {}
   const motions = []
+  const portraits = []
   const facts = []
   for (const tab of content.contents || []) {
     for (const block of blocksOf(tab.text)) {
@@ -325,8 +363,10 @@ function formatTabs(game, content) {
       const key = block.tmplKey || ''
       if (key === 'light') {
         facts.push(['命途', textOf(data.career)], ['稀有度', textOf(data.rate)])
+        if (data.image) portraits.push({ name: '光锥', src: data.image })
         remember(sections, parts, section('光锥效果', [data.skill], [], 'effect'))
         remember(sections, parts, section('光锥故事', [data.desc], [], 'story'))
+        remember(sections, parts, section('光锥晋阶', [], [], 'ascension', coneGroups(data.attr)))
       } else if (key === 'heritage') {
         const name = textOf((data.content || []).find(item => item.name === '套装名称')?.value)
         if (name) remember(sections, parts, section('套装效果', [data.story], [], 'set'))
@@ -348,10 +388,10 @@ function formatTabs(game, content) {
   const attrs = facts.filter(([, value]) => value).map(([key, value]) => ({ key, value }))
   const pick = name => attrs.find(item => item.key === name)?.value || ''
   return {
-    id: String(content.id), name: content.title || '未命名词条', icon: content.icon || '',
+    id: String(content.id), name: shortName(content.title) || '未命名词条', icon: content.icon || '',
     tags: attrs.map(item => item.value), attrs,
-    theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度') },
-    sections: sections.slice(0, 5), motions, parts,
+    theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度'), portrait: portraits[0]?.src || '' },
+    sections: sections.slice(0, 5), motions, portraits, videos: [], parts,
     url: `${game.site}/content/${content.id}/detail`,
   }
 }
@@ -380,6 +420,8 @@ function formatWiki(game, page) {
   const parts = {}
   const profile = []
   const motions = []
+  const portraits = []
+  const videos = []
   for (const module of page?.modules || []) {
     for (const component of module.components || []) {
       const data = parseJson(component.data, {})
@@ -390,6 +432,7 @@ function formatWiki(game, page) {
           .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
           .map(([key, value]) => `${key}：${value}`)
         profile.push(...facts, ...baseLines(data.attr))
+        if (data.tachie_pc || data.tachie_m) portraits.push({ name: '角色立绘', src: data.tachie_pc || data.tachie_m })
         remember(sections, parts, section(title || '基础资料', facts, [], 'profile'))
       } else if (id === 'material_base_info') {
         const facts = [['稀有度', data.grade], ['类型', data.type]]
@@ -408,27 +451,38 @@ function formatWiki(game, page) {
         for (const item of (data.list || []).flatMap(group => group.children || [])) {
           if (motionOf(item.animated_icon)) motions.push({ name: textOf(item.title) || '技能', src: item.animated_icon })
         }
-        remember(sections, parts, section(title || '技能', [], cards.slice(0, 4), 'skill'))
+        remember(sections, parts, section(title || '技能', [], cards, 'skill'))
       } else if (id === 'role_ascension') {
-        const groups = (data.list || []).map(level => ({
-          name: textOf(level.tab_name),
-          materials: (level.materials || []).map(item => ({ name: textOf(item.nickname), icon: item.img || '', amount: item.amount || '' })),
-          note: (level.attr || []).map(item => `${textOf(item.key)} ${textOf(item.value)}`).filter(Boolean).join('；'),
-        })).filter(group => group.name && (group.materials.length || group.note))
-        remember(sections, parts, section(title || '突破', [], [], 'ascension', groups))
+        remember(sections, parts, section(title || '突破', [], [], 'ascension', ascensionGroups(data.list)))
       } else if (id === 'driver_disk') {
         const cards = (data.disks_name || []).map((name, index) => ({ name: textOf(name), text: stripHtml(data.disks_desc?.[index]) }))
           .filter(item => item.name && item.text)
         remember(sections, parts, section(named(title, '驱动盘'), [], cards, 'disk'))
       } else if (id === 'double_col_table' || id === 'multi_table') {
-        const cards = tableCards(data)
-        const sample = cards.slice(0, 2).map(item => item.name).join(' ')
-        const focus = /影画/.test(title) || /^LEVEL\s?\d/i.test(sample) ? 'cinema' : /故事|印象|CV/.test(title) ? 'story' : ''
-        remember(sections, parts, section(named(title, focus === 'cinema' ? '影画' : '详情'), [], cards.slice(0, focus === 'cinema' ? 4 : 6), focus))
-      } else if (id === 'collapse_panel' || id === 'good_desc' || id === 'map_desc') {
+        const sample = tableSample(data)
+        if (/信赖|领取/.test(sample)) {
+          remember(sections, parts, section(named(title, '信赖奖励'), [], [], 'ascension', rewardGroups(data)))
+        } else {
+          const cards = tableCards(data)
+          const names = cards.slice(0, 2).map(item => item.name).join(' ')
+          const focus = /影画/.test(title) || /^LEVEL\s?\d/i.test(names) ? 'cinema' : /故事|印象|CV/.test(title) ? 'story' : ''
+          remember(sections, parts, section(named(title, focus === 'cinema' ? '影画' : '详情'), [], focus === 'cinema' ? cards : cards.slice(0, 8), focus))
+        }
+      } else if (id === 'map_desc') {
+        const shots = (data.list || []).map(item => ({ name: textOf(item.tab_name), src: item.image })).filter(item => item.src)
+        for (const shot of shots) if (motionOf(shot.src)) motions.push(shot)
+        const focus = /影画|立绘|卡片|展示|动画/.test(title) ? 'portrait' : ''
+        remember(sections, parts, section(named(title, '展示'), [], [], focus, [], shots.filter(shot => !motionOf(shot.src))))
+      } else if (id === 'collapse_panel' || id === 'good_desc') {
         const focus = /故事|印象|CV/.test(title) ? 'story' : ''
+        const clips = videosFromHtml(data.rich_text || data.desc)
+        videos.push(...clips)
         const cards = cardsFromHtml(data.rich_text)
-        const block = cards.length ? section(named(title, '详情'), [], cards.slice(0, 8), focus) : section(named(title, '详情'), [data.rich_text || data.desc || ''], [], focus)
+        const block = clips.length
+          ? section(named(title, '视频'), [], [], 'video', [], [], clips)
+          : cards.length
+            ? section(named(title, '详情'), [], cards.slice(0, 8), focus)
+            : section(named(title, '详情'), [data.rich_text || data.desc || ''], [], focus)
         remember(sections, parts, block)
       }
     }
@@ -444,18 +498,125 @@ function formatWiki(game, page) {
   }
   const pick = name => attrs.find(item => item.key === name)?.value || ''
   return {
-    id: String(page.id), name: page.name || '未命名词条', icon: page.icon_url || '',
+    id: String(page.id), name: shortName(page.name) || '未命名词条', icon: page.icon_url || '',
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
-    theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营') },
+    theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营'), portrait: portraits[0]?.src || '' },
     filters: {},
-    sections: sections.filter(item => item.focus !== 'story').slice(0, 4),
-    motions, parts,
+    sections: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait').slice(0, 5),
+    motions, portraits, videos, parts,
     url: `${game.site}/content/${page.id}/detail`,
   }
 }
 
 function named(title, fallback) {
   return title && !/默认标题|暂无/.test(title) ? title : fallback
+}
+
+function ascensionGroups(list) {
+  return (list || []).map(level => ({
+    name: textOf(level.tabName || level.tab_name),
+    materials: (level.materials || []).map(item => ({
+      name: textOf(item.title || item.nickname || item.name),
+      icon: item.icon || item.img || '',
+      amount: item.amount || item.num || '',
+    })).filter(item => item.name),
+    note: (level.attr || []).map(item => {
+      const value = Array.isArray(item.value) ? item.value.map(textOf).filter(Boolean).join('、') : textOf(item.value)
+      return [textOf(item.key), value].filter(Boolean).join(' ')
+    }).filter(Boolean).join('；'),
+  })).filter(group => group.name && (group.materials.length || group.note))
+}
+
+function coneGroups(list) {
+  return (list || []).map(level => ({
+    name: textOf(level.name_),
+    materials: (level.material || []).map(item => ({ name: textOf(item.name), icon: item.icon || '', amount: item.num || '' })).filter(item => item.name),
+  })).filter(group => group.materials.length)
+}
+
+function collectGallery(data, portraits, videos) {
+  for (const tab of data.list || []) {
+    for (const item of tab.table || []) {
+      const name = [textOf(item.name), textOf(item.append)].filter(Boolean).join(' · ')
+      const page = articleOf(item.url)
+      if (/视频/.test(tab.tabName || '') && page) videos.push({ name: name || '视频', page, cover: item.image || '' })
+      else if (item.image && !page) portraits.push({ name: name || textOf(tab.tabName) || '图片', src: item.image })
+    }
+  }
+}
+
+function articleOf(value) {
+  return String(value || '').match(/article\/(\d+)/)?.[1] || ''
+}
+
+function videosFromHtml(html) {
+  return [...String(html || '').matchAll(/<a[^>]+href=\"([^\"]*article\/\d+[^\"]*)\"[^>]*>([\s\S]*?)<\/a>/gi)].map(item => ({
+    name: textOf(item[2]) || '视频', page: articleOf(item[1]),
+  })).filter(item => item.page)
+}
+
+function tableSample(data) {
+  return (data.tables || []).flatMap(table => [textOf(table.tab_name), ...(table.header || []).map(textOf)]).join(' ')
+}
+
+function rewardGroups(data) {
+  return (data.tables || []).flatMap(table => {
+    const header = (table.header || []).map(textOf)
+    const row = (table.row || [])[0]
+    const cells = Array.isArray(row) ? row : Object.values(row || {})
+    return cells.map((cell, index) => ({
+      name: header[index] || `奖励${index + 1}`,
+      materials: entriesFromHtml(cell),
+    }))
+  }).filter(group => group.materials.length)
+}
+
+function entriesFromHtml(html) {
+  const source = String(html || '').replace(/\\"/g, '"')
+  return [...source.matchAll(/data-entry-name=\"([^\"]+)\"[^>]*data-entry-amount=\"([^\"]*)\"[^>]*data-entry-img=\"([^\"]+)\"|data-entry-img=\"([^\"]+)\"[^>]*data-entry-name=\"([^\"]+)\"[^>]*data-entry-amount=\"([^\"]*)\"/g)].map(item => ({
+    name: textOf(item[1] || item[5]),
+    amount: item[2] || item[6] || '',
+    icon: (item[3] || item[4] || '').split('?')[0],
+  })).filter(item => item.name)
+}
+
+const EMOJI_CHANNELS = { sr: 223, zzz: 74, ys: 268 }
+const GAME_IDS = { sr: '6', zzz: '8', ys: '2' }
+
+export async function emojiPacks(key) {
+  const game = gameOf(key)
+  const channel = EMOJI_CHANNELS[key]
+  if (!game || !channel) return []
+  const cached = cache.lists.get(`${key}:emoji`)
+  if (cached && Date.now() - cached.time < LIST_TTL) return cached.items
+  const data = await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/home/content/list?app_sn=${game.app}&channel_id=${channel}`)
+  const items = (data?.list || []).flatMap(group => group.list || [])
+    .filter(item => item?.content_id && item?.title)
+    .map(item => ({ id: String(item.content_id), name: item.title, icon: item.icon || '' }))
+  cache.lists.set(`${key}:emoji`, { time: Date.now(), items })
+  return items
+}
+
+export async function emojiImages(key, id) {
+  const game = gameOf(key)
+  const data = key === 'ys'
+    ? await requestJson(game, `${ENTRY_BASE}/hoyowiki/genshin/wapi/entry_page?app_sn=${game.app}&entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`)
+    : key === 'zzz'
+      ? await requestJson(game, `${ENTRY_BASE}/hoyowiki/wapi/entry_page?entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`)
+      : await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/content/info?app_sn=${game.app}&content_id=${encodeURIComponent(id)}`)
+  const page = data?.page || data?.content
+  const text = JSON.stringify(page || {})
+  return [...new Set([...text.matchAll(/https?:\\?\/\\?\/[^"'\\\s]+?\.(?:png|jpg|jpeg|gif|webp)/gi)].map(item => item[0].replace(/\\\//g, '/')))]
+    .filter(src => !/icon|avatar/i.test(src)).slice(0, 40)
+}
+
+export async function resolveVideo(key, page) {
+  const gid = GAME_IDS[key] || '2'
+  const data = await requestJson(gameOf(key), `https://bbs-api.miyoushe.com/post/wapi/getPostFull?post_id=${encodeURIComponent(page)}&gids=${gid}`)
+  const vod = data?.post?.vod_list?.[0]
+  const clips = vod?.resolutions || []
+  const clip = clips.find(item => item.definition === '720P') || clips[clips.length - 1]
+  return clip?.url || ''
 }
 
 function wikiValue(value) {
