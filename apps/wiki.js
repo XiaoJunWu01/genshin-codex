@@ -105,6 +105,12 @@ const ELEMENT_THEMES = {
   冰: ['#5FACC1', '#eefbff', '#173d48'],
   岩: ['#C09257', '#fff7ec', '#463318'],
   草: ['#6D9840', '#f4faec', '#243814'],
+  风属性: ['#378383', '#e7f6f4', '#123734'],
+  火属性: ['#B8584B', '#fff1ec', '#4a201b'],
+  冰属性: ['#5FACC1', '#eefbff', '#173d48'],
+  电属性: ['#6455A6', '#f4f1ff', '#2c244d'],
+  物理属性: ['#C09257', '#fff7ec', '#463318'],
+  以太属性: ['#8A4FA3', '#f8f1fb', '#3a2044'],
 }
 
 export function themeOf(entry) {
@@ -112,8 +118,10 @@ export function themeOf(entry) {
   const preset = ELEMENT_THEMES[theme.element] || ['#456990', '#f4f7fb', '#1e293b']
   return {
     element: theme.element || '',
+    path: theme.path || '',
     weapon: theme.weapon || '',
     rarity: theme.rarity || '',
+    faction: theme.faction || '',
     portrait: theme.portrait || '',
     color: theme.color || preset[0],
     soft: preset[1],
@@ -137,7 +145,7 @@ function imagesHtml(images, motion = false) {
   return `<div class="${motion ? 'motions' : 'gallery'}">${shots}</div>`
 }
 
-function groupsHtml(groups, total = []) {
+export function groupsHtml(groups, total = []) {
   const rows = (groups || []).map(group => {
     const items = (group.materials || []).map(materialHtml).join('')
     const note = group.note ? `<small>${textBlock(group.note)}</small>` : ''
@@ -320,9 +328,10 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ]],
       ['绝区零 · z', [
         ['z妮可', '代理人资料、技能和影画', 'z'],
-        ['z音擎 聚宝箱', '音擎', '擎'],
+        ['z音擎 聚宝箱', '音擎和突破材料', '擎'],
         ['z邦布 艾米莉安', '邦布', '布'],
-        ['z技能 妮可', '技能和影画', '技'],
+        ['z驱动盘 荆棘玫瑰', '套装效果和词条', '盘'],
+        ['z技能 妮可', '技能、影画和突破', '技'],
       ]],
     ]
     const body = `<div class="help">

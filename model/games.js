@@ -24,6 +24,13 @@ const CHANNEL_ALIASES = {
   材料: ['养成材料', '素材'],
 }
 const CHANNEL_SKIP = /攻略|成就|模拟宇宙|忘却之庭|虚构叙事|末日幻影|异相仲裁|逐光捡金|连战|活动/
+const MOTION = /\.(?:gif|webp)(?:$|\?)/i
+const ZZZ_CODES = {
+  ether: '以太', fire: '火', ice: '冰', electric: '电', physic: '物理', physics: '物理',
+  wind: '风', frost: '烈霜', lumino: '流明', blade: '凛刃', ink: '玄墨',
+  support: '支援', attack: '强攻', stun: '击破', anomaly: '异常', defense: '防护',
+  rupture: '命破', guard: '锋御',
+}
 const CACHE_TTL = 30 * 60 * 1000
 const LIST_TTL = 6 * 60 * 60 * 1000
 const cache = { channels: new Map(), lists: new Map(), searches: new Map(), entries: new Map() }
@@ -47,12 +54,14 @@ export const GAME_FOCUS = {
   sr: [
     { id: 'trace', name: '行迹', aliases: ['行迹', '技能'] },
     { id: 'eidolon', name: '星魂', aliases: ['星魂'] },
+    { id: 'effect', name: '效果', aliases: ['效果'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
   ],
   zzz: [
     { id: 'skill', name: '技能', aliases: ['技能'] },
     { id: 'cinema', name: '影画', aliases: ['影画'] },
+    { id: 'ascension', name: '突破', aliases: ['突破', '养成'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
   ],
@@ -224,11 +233,12 @@ function textOf(value) {
   return stripHtml(value).replace(/\s+/g, ' ').trim()
 }
 
-function section(title, lines = [], cards = [], focus = '') {
+function section(title, lines = [], cards = [], focus = '', groups = []) {
   const text = lines.map(textOf).filter(Boolean)
   const list = cards.filter(card => card?.name || card?.text)
-  if (!text.length && !list.length) return null
-  return { title, text: text.join('\n'), lines: text, cards: list, groups: [], images: [], videos: [], focus }
+  const levels = groups.filter(group => group?.materials?.length || group?.note)
+  if (!text.length && !list.length && !levels.length) return null
+  return { title, text: text.join('\n'), lines: text, cards: list, groups: levels, images: [], videos: [], focus }
 }
 
 function cardsFromHtml(html) {
@@ -261,11 +271,17 @@ function remember(sections, parts, block) {
 }
 
 function formatRpg(game, content) {
-  const body = content?.rpg_new_tmp_content
-  if (!body) return null
+  if (content?.rpg_new_tmp_content) return formatCharacter(game, content)
+  if (content?.contents?.length) return formatTabs(game, content)
+  return null
+}
+
+function formatCharacter(game, content) {
+  const body = content.rpg_new_tmp_content
   const info = body.base?.userInfo || {}
   const sections = []
   const parts = {}
+  const motions = []
   for (const module of body.modules || []) {
     for (const component of module.components || []) {
       const data = parseJson(component.data, {})
@@ -274,7 +290,7 @@ function formatRpg(game, content) {
         remember(sections, parts, section(module.name, lines, [], 'profile'))
       } else if (component.componentId === 'trace_graph') {
         const cards = (data.points || []).flatMap(point => (point.subList || []).map(item => ({
-          name: textOf(item.subTitle || item.title), text: stripHtml(item.subDesc || item.desc), icon: item.image || '',
+          name: textOf(item.subTitle || item.title), text: stripHtml(item.subDesc || item.desc), icon: stillOf(item.image),
         }))).filter(item => item.name && item.text)
         remember(sections, parts, section(module.name, [], cards.slice(0, 8), 'trace'))
       } else if (component.componentId === 'character_rich') {
@@ -292,56 +308,181 @@ function formatRpg(game, content) {
   return {
     id: String(content.id), name: content.title || info.name || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
-    theme: { element: filters['属性']?.[0] || '', weapon: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '' },
+    theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '' },
     sections: sections.filter(item => !/画廊|语音/.test(item.title)).slice(0, 5),
-    portraits: [], motions: [], videos: [], parts, url: `${game.site}/content/${content.id}/detail`,
+    motions, parts, url: `${game.site}/content/${content.id}/detail`,
   }
+}
+
+function formatTabs(game, content) {
+  const sections = []
+  const parts = {}
+  const motions = []
+  const facts = []
+  for (const tab of content.contents || []) {
+    for (const block of blocksOf(tab.text)) {
+      const data = block.data || {}
+      const key = block.tmplKey || ''
+      if (key === 'light') {
+        facts.push(['命途', textOf(data.career)], ['稀有度', textOf(data.rate)])
+        remember(sections, parts, section('光锥效果', [data.skill], [], 'effect'))
+        remember(sections, parts, section('光锥故事', [data.desc], [], 'story'))
+      } else if (key === 'heritage') {
+        const name = textOf((data.content || []).find(item => item.name === '套装名称')?.value)
+        if (name) remember(sections, parts, section('套装效果', [data.story], [], 'set'))
+        else remember(sections, parts, section(textOf((data.content || [])[0]?.value) || '遗器', [data.desc, data.story], [], 'story'))
+      } else if (key === 'enemy') {
+        if (data.introduce) {
+          facts.push(['种类', textOf(data.kind)], ['弱点', textOf(data.weak)], ['抗性', textOf(data.resistance)])
+          remember(sections, parts, section('敌人资料', [data.introduce], [], 'profile'))
+        }
+        const cards = (data.attr || []).map(item => ({ name: textOf(item.title || item.name_), text: textOf(item.introduction) }))
+        for (const item of data.attr || []) if (motionOf(item.gif)) motions.push({ name: textOf(item.title || item.name_) || '招式', src: item.gif })
+        remember(sections, parts, section(textOf(data.name) || '招式', [], cards, 'skill'))
+      } else if (key === 'material') {
+        facts.push(['稀有度', textOf(data.rate)], ['类型', textOf(data.type)])
+        remember(sections, parts, section('材料', [data.desc], [], 'profile'))
+      }
+    }
+  }
+  const attrs = facts.filter(([, value]) => value).map(([key, value]) => ({ key, value }))
+  const pick = name => attrs.find(item => item.key === name)?.value || ''
+  return {
+    id: String(content.id), name: content.title || '未命名词条', icon: content.icon || '',
+    tags: attrs.map(item => item.value), attrs,
+    theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度') },
+    sections: sections.slice(0, 5), motions, parts,
+    url: `${game.site}/content/${content.id}/detail`,
+  }
+}
+
+function blocksOf(html) {
+  const blocks = []
+  for (const item of [...String(html || '').matchAll(/data-data="([^"]+)"/g)]) {
+    let value = item[1]
+    try { value = decodeURIComponent(value) } catch {}
+    const data = parseJson(value, null)
+    for (const block of Array.isArray(data) ? data : [data]) if (block?.tmplKey) blocks.push(block)
+  }
+  return blocks
+}
+
+function stillOf(src) {
+  return src && !MOTION.test(src) ? src : ''
+}
+
+function motionOf(src) {
+  return src && MOTION.test(src) ? src : ''
 }
 
 function formatWiki(game, page) {
   const sections = []
   const parts = {}
+  const profile = []
+  const motions = []
   for (const module of page?.modules || []) {
     for (const component of module.components || []) {
       const data = parseJson(component.data, {})
       const id = component.component_id || ''
-      if (id === 'role_talent') {
+      const title = module.name || ''
+      if (id === 'role_base_info') {
+        const facts = [['属性', data.role_attribute], ['特性', data.role_profession], ['稀有度', data.grade]]
+          .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
+          .map(([key, value]) => `${key}：${value}`)
+        profile.push(...facts, ...baseLines(data.attr))
+        remember(sections, parts, section(title || '基础资料', facts, [], 'profile'))
+      } else if (id === 'material_base_info') {
+        const facts = [['稀有度', data.grade], ['类型', data.type]]
+          .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
+          .map(([key, value]) => `${key}：${value}`)
+        profile.push(...facts)
+        remember(sections, parts, section(title || '基础资料', facts, [], 'profile'))
+      } else if (id === 'rich_row_base_info') {
+        const lines = baseLines(data.attr)
+        profile.push(...lines)
+        remember(sections, parts, section(title || '基础资料', lines, [], 'profile'))
+      } else if (id === 'role_talent') {
         const cards = (data.list || []).flatMap(item => item.children || []).map(item => ({
-          name: textOf(item.title), text: stripHtml(item.desc), icon: item.animated_icon || item.icon || '',
+          name: textOf(item.title), text: stripHtml(item.desc), icon: stillOf(item.icon),
         })).filter(item => item.name && item.text)
-        remember(sections, parts, section(module.name || '技能', [], cards.slice(0, 8), 'skill'))
-      } else if (id === 'double_col_table') {
-        const cards = (data.tables || []).flatMap(table => (table.row || []).map(row => {
-          const source = Array.isArray(row) ? row : Object.values(row || {})
-          const icon = source.map(cell => String(cell).replace(/\\"/g, '"').match(/data-(?:image-url|entry-icon)="([^"]+)"/)?.[1] || '').find(Boolean) || ''
-          const textCells = source.map(cell => stripHtml(cell)).filter(Boolean)
-          return { name: textCells[0] || '', text: textCells.slice(1).join('\n'), icon }
-        }))
-        remember(sections, parts, section(module.name || '影画', [], cards.filter(item => item.name && item.text).slice(0, 6), 'cinema'))
-      } else if (/base_info/.test(id)) {
-        const lines = Object.entries(data.attr || {}).slice(0, 8).map(([key, value]) => `${key}：${textOf(value?.value || value)}`)
-        remember(sections, parts, section(module.name || '基础资料', lines, [], 'profile'))
-      } else if (id === 'collapse_panel' || id === 'good_desc') {
-        remember(sections, parts, section(module.name || '详情', [data.rich_text || ''], [], /故事|印象|CV/.test(module.name || '') ? 'story' : ''))
+        for (const item of (data.list || []).flatMap(group => group.children || [])) {
+          if (motionOf(item.animated_icon)) motions.push({ name: textOf(item.title) || '技能', src: item.animated_icon })
+        }
+        remember(sections, parts, section(title || '技能', [], cards.slice(0, 8), 'skill'))
+      } else if (id === 'role_ascension') {
+        const groups = (data.list || []).map(level => ({
+          name: textOf(level.tab_name),
+          materials: (level.materials || []).map(item => ({ name: textOf(item.nickname), icon: item.img || '', amount: item.amount || '' })),
+          note: (level.attr || []).map(item => `${textOf(item.key)} ${textOf(item.value)}`).filter(Boolean).join('；'),
+        })).filter(group => group.name && (group.materials.length || group.note))
+        remember(sections, parts, section(title || '突破', [], [], 'ascension', groups))
+      } else if (id === 'driver_disk') {
+        const cards = (data.disks_name || []).map((name, index) => ({ name: textOf(name), text: stripHtml(data.disks_desc?.[index]) }))
+          .filter(item => item.name && item.text)
+        remember(sections, parts, section(named(title, '驱动盘'), [], cards, 'disk'))
+      } else if (id === 'double_col_table' || id === 'multi_table') {
+        const cards = tableCards(data)
+        const sample = cards.slice(0, 2).map(item => item.name).join(' ')
+        const focus = /影画/.test(title) || /^LEVEL\s?\d/i.test(sample) ? 'cinema' : /故事|印象|CV/.test(title) ? 'story' : ''
+        remember(sections, parts, section(named(title, focus === 'cinema' ? '影画' : '详情'), [], cards.slice(0, focus === 'cinema' ? 6 : 8), focus))
+      } else if (id === 'collapse_panel' || id === 'good_desc' || id === 'map_desc') {
+        const focus = /故事|印象|CV/.test(title) ? 'story' : ''
+        const cards = cardsFromHtml(data.rich_text)
+        const block = cards.length ? section(named(title, '详情'), [], cards.slice(0, 8), focus) : section(named(title, '详情'), [data.rich_text || data.desc || ''], [], focus)
+        remember(sections, parts, block)
       }
     }
   }
-  const attrs = (parts.profile?.[0]?.lines || []).map(line => {
+  const seen = new Set()
+  const attrs = []
+  for (const line of profile) {
     const [key, ...rest] = line.split('：')
-    return { key, value: rest.join('：') }
-  })
-  const rawTags = page?.filter_values
-  const tagList = Array.isArray(rawTags) ? rawTags : Object.values(rawTags || {})
-  const tags = tagList.map(tag => String(tag?.value || tag).split('/').pop()).filter(Boolean)
+    const value = rest.join('：')
+    if (!key || !value || seen.has(key)) continue
+    seen.add(key)
+    attrs.push({ key, value })
+  }
+  const pick = name => attrs.find(item => item.key === name)?.value || ''
   return {
-    id: String(page.id), name: page.name || '未命名词条', icon: page.icon_url || '', tags, attrs,
-    theme: { element: tags[1] || '', weapon: tags[2] || '', rarity: tags[0] || '' },
-    sections: sections.slice(0, 5), portraits: [], motions: [], videos: [], parts,
+    id: String(page.id), name: page.name || '未命名词条', icon: page.icon_url || '',
+    tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
+    theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营') },
+    filters: {},
+    sections: sections.filter(item => item.focus !== 'story').slice(0, 6),
+    motions, parts,
     url: `${game.site}/content/${page.id}/detail`,
   }
 }
 
-export async function getGameEntry(key, id) {
+function named(title, fallback) {
+  return title && !/默认标题|暂无/.test(title) ? title : fallback
+}
+
+function wikiValue(value) {
+  const text = textOf(value)
+  if (!text || /^https?:/i.test(text)) return ''
+  return ZZZ_CODES[text.toLowerCase()] || text
+}
+
+function baseLines(attr) {
+  return Object.entries(attr || {}).slice(0, 8).map(([key, value]) => `${key}：${textOf(value?.value || value)}`).filter(line => !/：$/.test(line))
+}
+
+function tableCards(data) {
+  return (data.tables || []).flatMap(table => {
+    const group = textOf(table.tab_name)
+    return (table.row || []).map(row => {
+      const source = Array.isArray(row) ? row : Object.values(row || {})
+      const icon = source.map(cell => String(cell).replace(/\\"/g, '"').match(/data-(?:image-url|entry-icon)="([^"]+)"/)?.[1] || '').find(Boolean) || ''
+      const textCells = source.map(cell => stripHtml(cell)).filter(Boolean)
+      if (textCells.length < 2) return { name: group, text: textCells[0] || '', icon, group: '' }
+      return { name: textCells[0] || '', text: textCells.slice(1).join('\n'), icon, group }
+    })
+  }).filter(item => item.name && item.text)
+}
+
+
+export async function getGameEntry(key, id, hint = null) {
   const game = gameOf(key)
   const cacheKey = `${key}:${id}`
   const cached = cache.entries.get(cacheKey)
@@ -350,7 +491,21 @@ export async function getGameEntry(key, id) {
     ? formatRpg(game, (await requestJson(game, `${LIST_BASE}/common/blackboard/${game.app}/v1/content/info?app_sn=${game.app}&content_id=${encodeURIComponent(id)}`))?.content)
     : formatWiki(game, (await requestJson(game, `${ENTRY_BASE}/hoyowiki/wapi/entry_page?entry_page_id=${encodeURIComponent(id)}&lang=zh-cn`))?.page)
   if (!entry) throw new Error('词条内容为空')
+  if (hint?.filters) applyFilters(entry, hint.filters)
   cache.entries.set(cacheKey, { time: Date.now(), entry })
   return entry
+}
+
+function applyFilters(entry, filters) {
+  const pick = name => filters?.[name]?.[0] || ''
+  for (const [key, value] of [['属性', pick('属性')], ['特性', pick('特性')], ['阵营', pick('阵营')], ['稀有度', pick('稀有度')]]) {
+    if (!value || entry.attrs.some(item => item.key === key)) continue
+    entry.attrs.push({ key, value })
+  }
+  entry.theme.element = entry.theme.element || pick('属性')
+  entry.theme.weapon = entry.theme.weapon || pick('特性')
+  entry.theme.rarity = entry.theme.rarity || pick('稀有度')
+  entry.theme.faction = pick('阵营')
+  entry.filters = filters
 }
 

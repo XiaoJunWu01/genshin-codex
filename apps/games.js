@@ -7,7 +7,7 @@ import {
   channelOf, channelPattern, focusOf, gameOf,
   getGameEntry, listGame, searchGame,
 } from '../model/games.js'
-import { cardsHtml, entryCss, resultCss, themeOf } from './wiki.js'
+import { cardsHtml, entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sessions = new Map()
@@ -15,9 +15,9 @@ const GAMES = [
   { key: 'sr', letter: 's', words: ['星铁', '星穹铁道', '崩铁'] },
   { key: 'zzz', letter: 'z', words: ['绝区零', '绝区'] },
 ]
-const THEME_LABELS = {
-  sr: ['属性', '命途', '星级'],
-  zzz: ['阵营', '属性', '稀有度'],
+const THEMES = {
+  sr: entry => [['属性', entry.theme.element], ['命途', entry.theme.path], ['星级', entry.theme.rarity]],
+  zzz: entry => [['属性', entry.theme.element], ['特性', entry.theme.weapon], ['稀有度', entry.theme.rarity], ['阵营', entry.theme.faction]],
 }
 
 function escapeHtml(value) {
@@ -109,13 +109,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   entryHtml(key, entry, focus) {
     const theme = themeOf(entry)
-    const labels = THEME_LABELS[key]
     const icon = entry.icon ? `<img class="cover" src="${escapeHtml(entry.icon)}" alt="">` : ''
-    const facts = [theme.element, theme.weapon, theme.rarity].map((value, index) => value ? `<span><em>${labels[index]}</em><b>${escapeHtml(value)}</b></span>` : '').join('')
-    const used = new Set([theme.element, theme.weapon, theme.rarity])
+    const facts = (THEMES[key]?.(entry) || []).filter(([, value]) => value)
+      .map(([label, value]) => `<span><em>${label}</em><b>${escapeHtml(value)}</b></span>`).join('')
+    const used = new Set((THEMES[key]?.(entry) || []).map(([, value]) => value))
     const tags = (entry.tags || []).filter(tag => !used.has(tag)).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
     const source = focus ? entry.parts?.[focus.id] || [] : entry.sections || []
-    const sections = source.map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${cardsHtml(section.cards)}</section>`).join('')
+    const sections = source.map(section => `<section><h3>${escapeHtml(section.title)}</h3>${section.text ? `<p>${textBlock(section.text)}</p>` : ''}${groupsHtml(section.groups)}${cardsHtml(section.cards)}</section>`).join('')
     const links = !focus && entry.parts ? Object.keys(entry.parts).map(id => focusOf(key, id)?.name).filter(Boolean) : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''
     const title = focus ? `${entry.name} · ${focus.name}` : entry.name
@@ -135,7 +135,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const game = gameOf(command.key)
     const lines = command.key === 'sr'
       ? ['s流萤', 's角色 流萤', 's行迹 流萤', 's星魂 流萤', 's光锥 记一位友人', 's遗器 宝命长存的莳者']
-      : ['z妮可', 'z代理人 妮可', 'z技能 妮可', 'z影画 妮可', 'z音擎 聚宝箱', 'z邦布 艾米莉安']
+      : ['z妮可', 'z代理人 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z音擎 聚宝箱', 'z驱动盘 荆棘玫瑰', 'z邦布 艾米莉安']
     await e.reply([`${game.name}图鉴（${mark(game)} 前缀）`, ...lines].join('\n'))
     return true
   }
@@ -206,7 +206,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async show(e, key, target, focus) {
     const game = gameOf(key)
-    const entry = await getGameEntry(key, target.id)
+    const entry = await getGameEntry(key, target.id, target)
     const source = focus ? entry.parts?.[focus.id] || [] : entry.sections || []
     if (focus && !source.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。`)
@@ -222,6 +222,27 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       theme: themeOf(entry),
       extraCss: entryCss,
     }), lines.join('\n'))
+    if (!focus && entry.motions?.length) await this.sendMotions(e, entry)
     return true
+  }
+
+  async sendMotions(e, entry) {
+    const motions = entry.motions.slice(0, 12)
+    if (!e.group?.makeForwardMsg) {
+      await e.reply([`${entry.name}的动作：`, ...motions.flatMap(item => [item.name || '动作', segment.image(item.src)])])
+      return
+    }
+    const forward = await e.group.makeForwardMsg(motions.map(item => ({
+      message: [item.name || '动作', segment.image(item.src)],
+      nickname: entry.name,
+      user_id: 10000,
+    })))
+    const icon = entry.icon || ''
+    const nodes = Array.isArray(forward?.data) ? forward.data : null
+    for (const node of nodes || []) {
+      const author = node?.data
+      if (author && typeof author === 'object' && ('name' in author || 'uin' in author || 'avatar' in author)) author.avatar = icon
+    }
+    await e.reply(forward)
   }
 }
