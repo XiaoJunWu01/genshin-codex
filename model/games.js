@@ -336,7 +336,7 @@ function formatCharacter(game, content) {
         const rest = cards.filter(card => !skills.includes(card))
         remember(sections, parts, section(module.name || '角色行迹', [], [...skills, ...rest], 'trace'))
       } else if (component.componentId === 'character_rich') {
-        const focus = /星魂/.test(module.name) ? 'eidolon' : /故事|语音|关系/.test(module.name) ? 'story' : ''
+        const focus = /星魂/.test(module.name) ? 'eidolon' : /推荐/.test(module.name) ? 'recommend' : /故事|语音|关系/.test(module.name) ? 'story' : ''
         const cards = cardsFromHtml(data.richText)
         const limit = focus === 'eidolon' ? cards.length : /推荐/.test(module.name) ? 4 : 8
         remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, [data.richText], [], focus))
@@ -353,7 +353,7 @@ function formatCharacter(game, content) {
     const [key, ...rest] = line.split('：')
     return { key, value: rest.join('：') }
   })
-  const overview = sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus))
+  const overview = sections.filter(item => !item.focus || /profile|ascension|trace|skill|set/.test(item.focus))
   return {
     id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
@@ -404,7 +404,7 @@ function formatTabs(game, content) {
     id: String(content.id), name: shortName(content.title) || '未命名词条', icon: content.icon || '',
     tags: attrs.map(item => item.value), attrs,
     theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度'), portrait: portraits[0]?.src || '' },
-    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 3),
+    sections: sections.filter(item => !item.focus || /profile|ascension|effect|skill|set/.test(item.focus)).slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'), motions, portraits, videos: [], parts,
     url: `${game.site}/content/${content.id}/detail`,
   }
@@ -485,7 +485,7 @@ function formatWiki(game, page) {
       } else if (id === 'map_desc') {
         const shots = (data.list || []).map(item => ({ name: textOf(item.tab_name), src: item.image })).filter(item => item.src)
         for (const shot of shots) if (motionOf(shot.src)) motions.push(shot)
-        const focus = /影画|立绘|卡片|展示|动画/.test(title) ? 'portrait' : ''
+        const focus = 'portrait'
         remember(sections, parts, section(named(title, '展示'), [], [], focus, [], shots.filter(shot => !motionOf(shot.src))))
       } else if (id === 'collapse_panel' || id === 'good_desc') {
         const focus = /故事|印象|CV/.test(title) ? 'story' : ''
@@ -516,7 +516,7 @@ function formatWiki(game, page) {
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
     theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营'), portrait: portraits[0]?.src || '' },
     filters: {},
-    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 3),
+    sections: sections.filter(item => !item.focus || /profile|ascension|skill|disk|set/.test(item.focus)).slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts,
     url: `${game.site}/content/${page.id}/detail`,

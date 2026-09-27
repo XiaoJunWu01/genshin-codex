@@ -89,14 +89,15 @@ function getBackgroundImageUrl() {
 export function cardsHtml(cards) {
   const items = cards || []
   if (!items.length) return ''
-  return `<div class="equips">${items.map((card, index) => {
+  const effects = items.every(card => !card.icon && !card.icons?.length)
+  return `<div class="${effects ? 'effects' : 'equips'}">${items.map((card, index) => {
     const group = card.group && card.group !== items[index - 1]?.group
       ? `<div class="group">${escapeHtml(card.group)}</div>`
       : ''
     const icons = (card.icons?.length ? card.icons : [card.icon]).filter(Boolean)
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`
-      : '<span class="placeholder"></span>'
+      : (effects ? '' : '<span class="placeholder"></span>')
     const text = card.text ? `<p>${markText(card.text)}</p>` : ''
     return `${group}<div class="equip">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
   }).join('')}</div>`
@@ -194,7 +195,9 @@ section p b{color:var(--accent)}
 .level small{display:block;margin-top:8px;color:#475569;font-size:22px;line-height:1.55}
 .level small b{color:var(--accent)}
 .total{background:#fff;border:1px dashed var(--accent)}
-.equips{display:grid;grid-template-columns:1fr;gap:12px}
+.effects{display:flex;flex-direction:column;gap:12px}
+.effects .equip{align-items:flex-start;min-height:0}
+.equips{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:26px;font-weight:800}
 .equip{display:flex;align-items:center;gap:16px;min-height:96px;padding:16px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .equip .icons{display:flex;gap:8px;flex-shrink:0}
@@ -231,8 +234,8 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(${channelPattern})\\s*(\\S+)$`, fnc: 'queryAlias', priority: 50 },
         { reg: `^${lead}([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$`, fnc: 'queryMedia', priority: 70 },
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
-        { reg: '^#?g\\s*(\\S+)$', fnc: 'queryG', priority: 75 },
-        { reg: `^#(?!${reserved})([^\\s#]{1,16})$`, fnc: 'queryBare', priority: 78 },
+        { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 75 },
+        { reg: `^#(?!${reserved})([^\\s#]{2,16})$`, fnc: 'queryBare', priority: 78 },
       ],
     })
   }
@@ -281,7 +284,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const bg = getBackgroundImageUrl()
     const groups = [
       ['查询', [
-        ['#g角色 胡桃', '角色资料、天赋、命座和突破', '角'],
+        ['#g角色 胡桃', '属性、突破材料和推荐装备', '角'],
         ['g薇纳斯', '名字一致时直接出图', '查'],
         ['g蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
         ['g胡桃立绘', '全身立绘原图', '绘'],
@@ -297,8 +300,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#图鉴2', '打开上一次结果的第 2 条', '页'],
       ]],
       ['养成与世界', [
-        ['#g武器 狼的末路', '武器属性和突破材料', '武'],
-        ['#g圣遗物 饰金', '套装效果和推荐角色', '圣'],
+        ['#g武器 狼的末路', '武器属性、效果和突破材料', '武'],
+        ['#g圣遗物 饰金', '套装效果、单件和推荐角色', '圣'],
         ['#g敌人 丘丘人', '敌人资料', '敌'],
         ['#g食物 甜甜花酿鸡', '食谱材料和食用效果', '食'],
         ['#g材料 霓裳花', '材料来源和用途', '材'],
@@ -327,16 +330,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#g图鉴今天', '只看今天', '今'],
       ]],
       ['星穹铁道 · s', [
-        ['s流萤', '立绘、资料、行迹和星魂', 's'],
+        ['s流萤', '立绘、资料、晋阶和行迹', 's'],
         ['s行迹 流萤', '行迹全文', '迹'],
         ['s星魂 流萤', '六条星魂', '魂'],
         ['s晋阶 流萤', '晋阶材料和满级属性', '阶'],
         ['s影音 流萤', '先选一条再播放', '影'],
-        ['s光锥 记一位友人', '光锥效果和晋阶材料', '锥'],
+        ['s光锥 记一位星神的陨落', '光锥效果和晋阶材料', '锥'],
         ['s表情包', '米游社表情包', '表'],
       ]],
       ['绝区零 · z', [
-        ['z妮可', '立绘、技能和影画', 'z'],
+        ['z妮可', '立绘、资料、突破和技能', 'z'],
         ['z技能 妮可', '技能全文', '技'],
         ['z影画 妮可', '代理人影画', '画'],
         ['z突破 妮可', '突破材料和信赖奖励', '突'],
@@ -529,7 +532,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const brief = section => {
       if (focus) return section
       if (/推荐/.test(section.title)) return { ...section, cards: (section.cards || []).slice(0, 4).map(card => ({ ...card, text: '' })) }
-      if (section.focus === 'profile') return { ...section, text: clipText(section.text || '', 46) }
+      if (/圣遗物件/.test(section.title)) return { ...section, cards: (section.cards || []).map(card => ({ ...card, text: '' })) }
+      if (section.focus === 'profile') {
+        const effect = (section.cards || []).filter(card => /效果|件套|精炼|特效/.test(`${card.name}${card.text}`))
+        return effect.length
+          ? { ...section, text: '', cards: effect }
+          : { ...section, text: clipText(section.text || '', 46), cards: [] }
+      }
       if (section.focus === 'ascension') return { ...section, groups: [], text: '' }
       return section
     }
@@ -594,11 +603,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }
     const part = focus?.id === 'detail' ? null : (focus ? entry.parts?.[focus.id] || [] : null)
     if (focus && !part.length) {
-      await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #角色 ${entry.name}`)
+      await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #图鉴 ${entry.name}`)
       return
     }
     const hint = focus
-      ? `返回总览：#角色 ${entry.name}`
+      ? `返回总览：#图鉴 ${entry.name}`
       : (extraFooter || '数据来源：米游社观测枢')
     await this.replyImage(e, this.wrapHtml({
       title: focus ? `${entry.name} · ${focus.name}` : entry.name,
@@ -803,20 +812,21 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const keyword = matched?.[2] || ''
     if (!focus || !keyword) return false
     try {
-      const results = await searchWiki(keyword, { channelId: 25, limit: 8 })
-      if (!results.length) {
-        await e.reply(`没有找到角色「${keyword}」。`)
+      const results = await searchWiki(keyword, { limit: 8 })
+      const exact = results.filter(item => item.score >= 100)
+      if (!exact.length) {
+        await e.reply(`没有找到「${keyword}」。可以先看 #图鉴 ${keyword}`)
         return true
       }
-      const chosen = this.uniqueHit(results)
+      const chosen = this.uniqueHit(exact)
       if (chosen) {
         await this.showEntry(e, chosen, '', focus)
         return true
       }
-      sessions.set(this.sessionKey(e), { results, keyword, focus: focus.id, time: Date.now() })
-      const view = this.resultListHtml(results, 1, keyword)
+      sessions.set(this.sessionKey(e), { results: exact, keyword, focus: focus.id, time: Date.now() })
+      const view = this.resultListHtml(exact, 1, keyword)
       await this.replyImage(e, this.wrapHtml({
-        title: `「${keyword}」的角色`,
+        title: `「${keyword}」`,
         subtitle: `选一个再看${focus.name}`,
         body: view.body,
         footer: `发送 #图鉴序号 查看${focus.name}，例如 #图鉴1`,
@@ -871,20 +881,23 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }
 
       const results = await searchWiki(parsed.keyword, { channelId: parsed.channel?.id || 0, limit: 20 })
-      if (!results.length) {
-        await e.reply(`没有找到「${parsed.keyword}」。`)
+      const matched = parsed.channel ? results : results.filter(item => item.score >= 100)
+      if (!matched.length) {
+        await e.reply(parsed.channel
+          ? `${parsed.channel.name}里没有「${parsed.keyword}」。`
+          : `没有找到「${parsed.keyword}」。名字差一个字时，用 #图鉴 ${parsed.keyword} 搜索`)
         return true
       }
-      sessions.set(key, { results, keyword: parsed.keyword, time: Date.now() })
+      sessions.set(key, { results: matched, keyword: parsed.keyword, time: Date.now() })
 
-      const chosen = parsed.page === 1 ? this.uniqueHit(results) : null
+      const chosen = parsed.page === 1 ? this.uniqueHit(matched) : null
       if (chosen) {
-        const extra = results.length > 1 ? `还有 ${results.length - 1} 个相关结果，发送 #图鉴2 查看` : ''
+        const extra = matched.length > 1 ? `还有 ${matched.length - 1} 个相关结果，发送 #图鉴2 查看` : ''
         await this.showEntry(e, chosen, extra)
         return true
       }
 
-      const view = this.resultListHtml(results, parsed.page, [parsed.channel?.name, parsed.keyword].filter(Boolean).join(' '))
+      const view = this.resultListHtml(matched, parsed.page, [parsed.channel?.name, parsed.keyword].filter(Boolean).join(' '))
       await this.replyImage(e, this.wrapHtml({
         title: `「${parsed.keyword}」的搜索结果`,
         subtitle: parsed.channel ? `分类：${parsed.channel.name}` : '发送序号查看详情',

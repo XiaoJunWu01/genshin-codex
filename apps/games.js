@@ -49,11 +49,11 @@ const LAYOUT = {
   },
 }
 const OVERVIEW = {
-  sr: new Set(['profile', 'ascension', 'set']),
-  zzz: new Set(['profile', 'ascension']),
+  sr: new Set(['profile', 'ascension', 'trace', 'effect', 'skill', 'set']),
+  zzz: new Set(['profile', 'ascension', 'skill', 'disk', 'set']),
 }
 const GAME_CSS = `
-.board{display:grid;gap:12px}.board.cols-2{grid-template-columns:1fr}.board.cols-1{grid-template-columns:1fr}
+.board{display:grid;gap:12px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
 .group{grid-column:1/-1;margin-top:6px;color:var(--accent);font-size:26px;font-weight:800}
 .tile{min-width:0;padding:18px 20px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .tile>div{display:flex;align-items:center;gap:16px}.tile .icons{display:flex;gap:8px;flex-shrink:0}
@@ -96,10 +96,10 @@ export default class GameWikiPlugin extends plugin {
       priority: 480,
       rule: [
         { reg: `^#?[${letters}](?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
-        { reg: `^#?[${letters}](?![a-z#])\\s*\\S+`, fnc: 'query' },
+        { reg: `^#?[${letters}](?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
         { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^(?:#|g)?(?:${words})(?:\\s*帮助)?$`, fnc: 'help' },
-        { reg: `^(?:#|g)?(?:${words})\\s*\\S+`, fnc: 'query' },
+        { reg: `^(?:#|g)?(?:${words})\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
         { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
       ],
     })
@@ -160,16 +160,19 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ? entry.all || entry.sections || []
       : (focus
         ? entry.parts?.[focus.id] || []
-        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)))
+        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)).slice(0, 3))
     const sections = source.map(section => {
       const shown = !focus && section.focus === 'profile'
         ? { ...section, text: clipText(section.text || '', 46) }
-        : (!focus && section.focus === 'ascension' ? { ...section, groups: [], text: '' } : section)
-      const layout = LAYOUT[key]?.[section.focus] || { columns: 2, showIcon: true }
+        : (!focus && section.focus === 'ascension' ? { ...section, groups: [], text: '' }
+          : (!focus && /推荐/.test(section.title) ? { ...section, cards: (section.cards || []).slice(0, 4).map(card => ({ ...card, text: '' })) } : section))
+      const layout = LAYOUT[key]?.[section.focus] || { columns: /推荐/.test(section.title) ? 2 : 1, showIcon: true }
       const cards = boardHtml(shown.cards, layout)
       return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}</section>`
     }).join('')
-    const links = !focus || focus.id === 'detail' ? Object.keys(entry.parts || {}).map(id => focusOf(key, id)?.name).filter(Boolean) : []
+    const links = !focus || focus.id === 'detail'
+      ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => focusOf(key, id)?.name).filter(Boolean)
+      : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const splash = focus?.id === 'detail' || !entry.theme?.portrait ? '' : `<img class="splash" src="${escapeHtml(entry.theme.portrait)}" alt="">`
@@ -210,22 +213,25 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       if (!keyword) return this.catalog(e, command.key, channel)
       if (page && /影音|视频/.test(rest)) return this.openVideoPage(e, command.key, keyword, page)
       const results = await searchGame(command.key, keyword, { channelId: channel?.id || 0, limit: 8 })
-      if (!results.length) {
-        await e.reply(`${game.name}没有找到「${keyword}」。`)
+      const matched = channel || focus ? results : results.filter(item => item.score >= 100)
+      if (!matched.length) {
+        await e.reply(channel
+          ? `${game.name}的${channel.name}里没有「${keyword}」。`
+          : `${game.name}没有找到「${keyword}」。`)
         return true
       }
-      const exact = results.filter(item => item.score >= 100)
-      const chosen = results.length === 1 || exact.length === 1 ? (exact[0] || results[0]) : null
+      const exact = matched.filter(item => item.score >= 100)
+      const chosen = matched.length === 1 || exact.length === 1 ? (exact[0] || matched[0]) : null
       if (chosen) return this.show(e, command.key, chosen, focus)
-      sessions.set(this.sessionKey(e, command.key), { results, focus: focus?.id || '', time: Date.now() })
+      sessions.set(this.sessionKey(e, command.key), { results: matched, focus: focus?.id || '', time: Date.now() })
       const gameInfo = GAMES.find(item => item.key === command.key)
       await this.replyImage(e, this.page({
         title: `「${keyword}」`,
         subtitle: `${game.name}有多个结果`,
-        body: this.resultHtml(results),
+        body: this.resultHtml(matched),
         footer: `发送 ${gameInfo.letter}1 打开对应条目`,
         extraCss: resultCss,
-      }), results.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
+      }), matched.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
     } catch (err) {
       logger.error(`[${game.name}图鉴]`, err)
       await e.reply(`${game.name}图鉴查询失败，请稍后重试`)

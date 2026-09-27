@@ -643,6 +643,21 @@ function attrPairs(attrs, limit = 8) {
   })).filter(attr => attr.key && attr.value).slice(0, limit)
 }
 
+function effectCards(attrs) {
+  return attrPairs(attrs, 8)
+    .filter(attr => /件套|效果|精炼|特效/.test(attr.key))
+    .map(attr => ({ name: attr.key, text: attr.value }))
+}
+
+function weaponEffect(html) {
+  const text = stripHtml(html)
+  const matched = text.match(/精炼(?:\([^)]*\))?阶\s*([\s\S]*?)(?:\n\n|$)/)
+  if (!matched) return []
+  const body = matched[1].replace(/^[·\s]+/, '').trim()
+  const name = body.split(/[·：:]/)[0].trim()
+  return body ? [{ name: name && name.length <= 12 ? name : '武器效果', text: body }] : []
+}
+
 function parseGrowth(data) {
   const levels = (data?.list || []).map(level => {
     const materials = materialItems(level.materials)
@@ -838,8 +853,12 @@ function parseComponent(component, moduleName) {
     return lines.length ? { title: '基础资料', lines } : null
   }
   if (id === 'good_desc') {
-    const attrs = attrPairs(data?.attr, 6).map(attr => `${attr.key}：${attr.value}`)
-    return { title, lines: [stripHtml(data?.rich_text), ...attrs].filter(Boolean) }
+    const cards = [...effectCards(data?.attr), ...weaponEffect(data?.rich_text)]
+    const attrs = attrPairs(data?.attr, 6)
+      .filter(attr => !cards.some(card => card.name === attr.key))
+      .map(attr => `${attr.key}：${attr.value}`)
+    const flavor = stripHtml(data?.rich_text).replace(/精炼(?:\([^)]*\))?阶\s*[\s\S]*?(?:\n\n|$)/, '').trim()
+    return { title, lines: [flavor, ...attrs].filter(Boolean), cards }
   }
   if (id === 'equipment_growth_info') {
     const parsed = parseGrowth(data)
@@ -876,7 +895,11 @@ function parseComponent(component, moduleName) {
     return card ? { title: '圣遗物件', lines: [], cards: [card] } : null
   }
   if (id === 'rich_base_info') {
-    return { title, lines: attrPairs(data?.list || data?.attr, 8).map(attr => `${attr.key}：${attr.value}`) }
+    const cards = effectCards(data?.list || data?.attr)
+    const lines = attrPairs(data?.list || data?.attr, 8)
+      .filter(attr => !cards.some(card => card.name === attr.key))
+      .map(attr => `${attr.key}：${attr.value}`)
+    return { title, lines, cards }
   }
   if (id === 'collapse_panel' || id === 'rich_text') {
     const video = videoFromHtml(data?.rich_text)
@@ -995,7 +1018,6 @@ function headerFrom(page) {
 }
 
 const BRIEF = /基础资料|基础属性|物品描述|装备描述|圣遗物|推荐装备|推荐角色|特殊料理|突破|成长数值|升级材料/
-const STORY_TITLE = /故事|神之眼|更多描述|角色详细|角色CV|配音/
 const PROFILE_TITLE = /基础资料|基础信息|基础属性|物品描述|装备描述/
 const ASCENSION_TITLE = /突破|成长数值|升级材料/
 
@@ -1003,7 +1025,7 @@ function focusOf(title = '', images = []) {
   if (/天赋/.test(title)) return 'talent'
   if (/命之座|命座/.test(title)) return 'constellation'
   if (ASCENSION_TITLE.test(title)) return 'ascension'
-  if (STORY_TITLE.test(title)) return 'story'
+  if (/故事|神之眼|更多描述|角色详细|角色CV|配音/.test(title)) return 'story'
   if (PROFILE_TITLE.test(title)) return 'profile'
   if (/展示/.test(title) && images.length) {
     const still = images.every(item => !item.motion)
@@ -1078,7 +1100,16 @@ export function formatWikiEntry(page) {
   const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
   const videos = sections.flatMap(section => section.videos || [])
   const character = isCharacterPage(page)
-  const overview = sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 3)
+  const wanted = character ? ['profile', 'ascension'] : ['profile', 'ascension']
+  const picked = []
+  const recommend = sections.find(section => /推荐/.test(section.title))
+  for (const id of wanted) {
+    if (picked.length >= (recommend ? 2 : 3)) break
+    const found = sections.find(section => section.focus === id)
+    if (found) picked.push(found)
+  }
+  if (recommend && picked.length < 3) picked.push(recommend)
+  const overview = picked.length ? picked : sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 3)
 
   return {
     id: String(page.id),
@@ -1092,15 +1123,9 @@ export function formatWikiEntry(page) {
     portraits,
     motions,
     videos,
-    parts: {
-      talent: sections.filter(section => section.focus === 'talent'),
-      constellation: sections.filter(section => section.focus === 'constellation'),
-      ascension: sections.filter(section => section.focus === 'ascension'),
-      story: sections.filter(section => section.focus === 'story'),
-      profile: sections.filter(section => section.focus === 'profile'),
-      portrait: sections.filter(section => section.focus === 'portrait'),
-      showcase: sections.filter(section => section.focus === 'showcase'),
-    },
+    parts: Object.fromEntries(['talent', 'constellation', 'ascension', 'story', 'profile', 'portrait', 'showcase']
+      .map(id => [id, sections.filter(section => section.focus === id)])
+      .filter(([, list]) => list.length)),
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
 }
