@@ -1078,7 +1078,7 @@ export function formatWikiEntry(page) {
   const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
   const videos = sections.flatMap(section => section.videos || [])
   const character = isCharacterPage(page)
-  const overview = sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 5)
+  const overview = sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 3)
 
   return {
     id: String(page.id),

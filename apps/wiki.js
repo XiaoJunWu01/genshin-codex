@@ -43,8 +43,12 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-function textBlock(value) {
-  return escapeHtml(value).replace(/\n/g, '<br>').replace(/(\d+(?:\.\d+)?%?)/g, '<b>$1</b>')
+const KEYWORDS = ['风','火','水','雷','冰','岩','草','风属性','火属性','冰属性','电属性','物理属性','以太属性','单手剑','双手剑','长柄武器','法器','弓','攻击力','生命值','防御力','元素精通','元素充能效率','暴击率','暴击伤害','元素伤害','物理伤害','治疗加成','护盾强效']
+  .sort((a, b) => b.length - a.length)
+
+export function markText(value) {
+  const pattern = new RegExp(`(${KEYWORDS.join('|')}|\\d+(?:\\.\\d+)?%?)`, 'g')
+  return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, '<b>$1</b>')
 }
 
 function runGit(args) {
@@ -93,7 +97,7 @@ export function cardsHtml(cards) {
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`
       : '<span class="placeholder"></span>'
-    const text = card.text ? `<p>${textBlock(card.text)}</p>` : ''
+    const text = card.text ? `<p>${markText(card.text)}</p>` : ''
     return `${group}<div class="equip">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
   }).join('')}</div>`
 }
@@ -149,7 +153,7 @@ function imagesHtml(images, motion = false) {
 export function groupsHtml(groups, total = []) {
   const rows = (groups || []).map(group => {
     const items = (group.materials || []).map(materialHtml).join('')
-    const note = group.note ? `<small>${textBlock(group.note)}</small>` : ''
+    const note = group.note ? `<small>${markText(group.note)}</small>` : ''
     return `<div class="level"><b>${escapeHtml(group.name)}</b><div>${items}</div>${note}</div>`
   }).join('')
   const summary = total?.length
@@ -167,13 +171,13 @@ export const entryCss = `
 .facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
 .facts span{min-width:84px;padding:7px 12px;border-radius:12px;background:#fff;border:1px solid rgba(15,23,42,.06);border-top:4px solid var(--accent)}
 .facts em{display:block;color:#64748b;font-style:normal;font-size:14px}
-.facts b{color:var(--ink);font-size:20px}
+.facts b{color:var(--accent);font-size:20px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tags span{padding:4px 12px;border-radius:999px;background:var(--accent);color:#fff;font-size:15px;font-weight:700}
 .attrs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
 .attrs div{padding:11px 14px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:14px;border-left:5px solid var(--accent)}
 .attrs em{display:block;color:var(--accent);font-style:normal;font-size:15px;font-weight:800}
-.attrs b{color:var(--ink);font-size:20px;line-height:1.45}
+.attrs b{color:var(--accent);font-size:20px;line-height:1.45}
 section{margin-top:10px;padding:12px;border:1px solid rgba(15,23,42,.08);border-radius:14px;background:#fff}
 section h3{display:flex;align-items:center;gap:8px;margin-bottom:12px;color:var(--ink);font-size:22px}
 section h3::before{content:\"\";width:4px;height:14px;border-radius:4px;background:var(--accent)}
@@ -195,7 +199,7 @@ section p b{color:var(--accent)}
 .equip{display:flex;align-items:center;gap:10px;min-height:64px;padding:12px;border-radius:14px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .equip .icons{display:flex;gap:4px;flex-shrink:0}
 .equip .icons img,.equip>img,.equip>.placeholder{width:52px;height:52px;object-fit:contain;border-radius:12px;background:#fff}
-.equip b{display:block;color:var(--ink);font-size:18px;line-height:1.35}
+.equip b{display:block;color:var(--accent);font-size:18px;line-height:1.35}
 .equip p{margin-top:4px;color:#475569;font-size:15px;line-height:1.5}
 .more{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:12px;padding:10px;border-radius:12px;background:var(--soft)}
 .more em{color:#64748b;font-style:normal;font-size:15px}
@@ -524,8 +528,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       : ''
     const brief = section => {
       if (focus) return section
-      if (/推荐/.test(section.title)) return { ...section, cards: (section.cards || []).map(card => ({ ...card, text: '' })) }
-      if (section.focus === 'profile') return { ...section, text: clipText(section.text || '', 90) }
+      if (/推荐/.test(section.title)) return { ...section, cards: (section.cards || []).slice(0, 4).map(card => ({ ...card, text: '' })) }
+      if (section.focus === 'profile') return { ...section, text: clipText(section.text || '', 46) }
+      if (section.focus === 'ascension') return { ...section, groups: [], text: '' }
       return section
     }
     const source = focus?.id === 'detail'
@@ -534,7 +539,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const sections = source.map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${textBlock(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${pictures}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${pictures}</section>`
     }).join('')
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)

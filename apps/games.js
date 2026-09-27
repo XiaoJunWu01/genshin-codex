@@ -8,7 +8,7 @@ function boardHtml(cards, { columns = 2, showIcon = true } = {}) {
     const icons = showIcon ? (card.icons?.length ? card.icons : [card.icon]).filter(Boolean) : []
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>` : ''
-    const text = card.text ? `<p>${textBlock(card.text)}</p>` : ''
+    const text = card.text ? `<p>${markText(card.text)}</p>` : ''
     return `${group}<article class="${icon ? 'tile' : 'tile plain'}"><div>${icon}<b>${escapeHtml(card.name || '')}</b></div>${text}</article>`
   }).join('')}</div>`
 }
@@ -22,7 +22,7 @@ import {
   getGameEntry, listGame, mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
 import { clipText } from '../model/wiki.js'
-import { entryCss, groupsHtml, resultCss, themeOf } from './wiki.js'
+import { entryCss, groupsHtml, markText, resultCss, themeOf } from './wiki.js'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sessions = new Map()
@@ -58,7 +58,7 @@ const GAME_CSS = `
 .tile{min-width:0;padding:14px 16px;border-radius:14px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .tile>div{display:flex;align-items:center;gap:10px}.tile .icons{display:flex;gap:4px;flex-shrink:0}
 .tile img{width:48px;height:48px;object-fit:contain;border-radius:10px;background:#fff}
-.tile b{color:var(--ink);font-size:18px;line-height:1.4}
+.tile b{color:var(--accent);font-size:18px;line-height:1.4}
 .tile p{margin-top:6px;color:#475569;font-size:16px;line-height:1.6;word-break:break-word}
 .tile p b{color:var(--accent)}
 .hero.art{align-items:flex-end}.hero.art .splash{width:180px;height:240px;object-fit:contain;object-position:center bottom;border-radius:16px;background:transparent}
@@ -66,10 +66,6 @@ const GAME_CSS = `
 
 function escapeHtml(value) {
   return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
-}
-
-function textBlock(value) {
-  return escapeHtml(value).replace(/\n/g, '<br>').replace(/(\d+(?:\.\d+)?%?)/g, '<b>$1</b>')
 }
 
 function commandOf(text) {
@@ -166,10 +162,12 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ? entry.parts?.[focus.id] || []
         : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)))
     const sections = source.map(section => {
-      const shown = !focus && section.focus === 'profile' ? { ...section, text: clipText(section.text || '', 90) } : section
+      const shown = !focus && section.focus === 'profile'
+        ? { ...section, text: clipText(section.text || '', 46) }
+        : (!focus && section.focus === 'ascension' ? { ...section, groups: [], text: '' } : section)
       const layout = LAYOUT[key]?.[section.focus] || { columns: 2, showIcon: true }
       const cards = boardHtml(shown.cards, layout)
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${textBlock(shown.text)}</p>` : ''}${groupsHtml(shown.groups)}${cards}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}</section>`
     }).join('')
     const links = !focus || focus.id === 'detail' ? Object.keys(entry.parts || {}).map(id => focusOf(key, id)?.name).filter(Boolean) : []
     const more = links.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${mark(gameOf(key))}${escapeHtml(name)} ${escapeHtml(entry.name)}</span>`).join('')}</div>` : ''

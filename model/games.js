@@ -358,7 +358,7 @@ function formatCharacter(game, content) {
     id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
     theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '', portrait: portraits[0]?.src || '' },
-    sections: overview.slice(0, 6),
+    sections: overview.slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts, url: `${game.site}/content/${content.id}/detail`,
   }
@@ -404,7 +404,7 @@ function formatTabs(game, content) {
     id: String(content.id), name: shortName(content.title) || '未命名词条', icon: content.icon || '',
     tags: attrs.map(item => item.value), attrs,
     theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度'), portrait: portraits[0]?.src || '' },
-    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 4),
+    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'), motions, portraits, videos: [], parts,
     url: `${game.site}/content/${content.id}/detail`,
   }
@@ -516,7 +516,7 @@ function formatWiki(game, page) {
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
     theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营'), portrait: portraits[0]?.src || '' },
     filters: {},
-    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 5),
+    sections: sections.filter(item => !item.focus || /profile|ascension|set/.test(item.focus)).slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts,
     url: `${game.site}/content/${page.id}/detail`,
