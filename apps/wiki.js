@@ -43,12 +43,12 @@ function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-const KEYWORDS = ['风','火','水','雷','冰','岩','草','风属性','火属性','冰属性','电属性','物理属性','以太属性','单手剑','双手剑','长柄武器','法器','弓','攻击力','生命值','防御力','元素精通','元素充能效率','暴击率','暴击伤害','元素伤害','物理伤害','治疗加成','护盾强效']
+const KEYWORDS = ['风属性','火属性','冰属性','电属性','物理属性','以太属性','风','火','水','雷','冰','岩','草','物理','以太','电','烈霜','单手剑','双手剑','长柄武器','法器','弓','攻击力','生命值','防御力','元素精通','元素充能效率','暴击率','暴击伤害','元素伤害','物理伤害','治疗加成','护盾强效','异常精通','冲击力','穿透率','异常掌控','能量自动回复']
   .sort((a, b) => b.length - a.length)
 
 export function markText(value) {
   const pattern = new RegExp(`(${KEYWORDS.join('|')}|\\d+(?:\\.\\d+)?%?)`, 'g')
-  return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, '<b>$1</b>')
+  return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, match => /^\d/.test(match) ? `<b>${match}</b>` : `<b class="word">${match}</b>`)
 }
 
 function runGit(args) {
@@ -117,6 +117,10 @@ const ELEMENT_THEMES = {
   电属性: ['#6455A6', '#f4f1ff', '#2c244d'],
   物理属性: ['#C09257', '#fff7ec', '#463318'],
   以太属性: ['#8A4FA3', '#f8f1fb', '#3a2044'],
+  物理: ['#C09257', '#fff7ec', '#463318'],
+  以太: ['#8A4FA3', '#f8f1fb', '#3a2044'],
+  电: ['#6455A6', '#f4f1ff', '#2c244d'],
+  烈霜: ['#5FACC1', '#eefbff', '#173d48'],
 }
 
 export function themeOf(entry) {
@@ -184,6 +188,8 @@ section h3{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:var
 section h3::before{content:\"\";width:6px;height:22px;border-radius:6px;background:var(--accent)}
 section p{color:#334155;font-size:26px;line-height:1.7;word-break:break-word}
 section p b{color:var(--accent)}
+section p b.word{font-weight:800}
+.effects .equip p b.word,.tile p b.word,.equip p b.word{display:inline;font-weight:800}
 .levels{display:flex;flex-direction:column;gap:6px}
 .level{padding:8px;border-radius:10px;background:var(--soft)}
 .level>b{display:block;margin-bottom:12px;color:var(--accent);font-size:26px}
@@ -196,7 +202,9 @@ section p b{color:var(--accent)}
 .level small b{color:var(--accent)}
 .total{background:#fff;border:1px dashed var(--accent)}
 .effects{display:flex;flex-direction:column;gap:12px}
-.effects .equip{align-items:flex-start;min-height:0}
+.effects .equip{display:block;min-height:0;padding:18px 20px}
+.effects .equip b{font-size:28px}
+.effects .equip p{margin-top:8px;color:#334155;font-size:26px;line-height:1.7}
 .equips{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:26px;font-weight:800}
 .equip{display:flex;align-items:center;gap:16px;min-height:96px;padding:16px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
@@ -284,7 +292,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const bg = getBackgroundImageUrl()
     const groups = [
       ['查询', [
-        ['#g角色 胡桃', '属性、突破材料和推荐装备', '角'],
+        ['#g角色 胡桃', '简介、满级突破和推荐装备', '角'],
         ['g薇纳斯', '名字一致时直接出图', '查'],
         ['g蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
         ['g胡桃立绘', '全身立绘原图', '绘'],
@@ -300,8 +308,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#图鉴2', '打开上一次结果的第 2 条', '页'],
       ]],
       ['养成与世界', [
-        ['#g武器 狼的末路', '武器属性、效果和突破材料', '武'],
-        ['#g圣遗物 饰金', '套装效果、单件和推荐角色', '圣'],
+        ['#g武器 狼的末路', '武器效果、突破材料和推荐角色', '武'],
+        ['#g圣遗物 饰金', '套装效果和推荐角色', '圣'],
         ['#g敌人 丘丘人', '敌人资料', '敌'],
         ['#g食物 甜甜花酿鸡', '食谱材料和食用效果', '食'],
         ['#g材料 霓裳花', '材料来源和用途', '材'],
@@ -526,18 +534,17 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const tags = (entry.tags || []).filter(tag => ![theme.element, theme.weapon, theme.rarity].includes(tag))
       .map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
     const attrs = !focus || focus.id === 'profile'
-      ? (entry.attrs || []).filter(attr => focus || !/描述|故事|简介/.test(attr.key))
+      ? (entry.attrs || []).filter(attr => focus || !/描述|故事|简介|件套|效果/.test(attr.key))
         .map(attr => `<div><em>${escapeHtml(attr.key)}</em><b>${escapeHtml(attr.value)}</b></div>`).join('')
       : ''
     const brief = section => {
       if (focus) return section
-      if (/推荐/.test(section.title)) return { ...section, cards: (section.cards || []).slice(0, 4).map(card => ({ ...card, text: '' })) }
-      if (/圣遗物件/.test(section.title)) return { ...section, cards: (section.cards || []).map(card => ({ ...card, text: '' })) }
+      if (section.focus === 'recommend') {
+        return { ...section, cards: (section.cards || []).slice(0, 6).map(card => ({ ...card, text: '' })) }
+      }
       if (section.focus === 'profile') {
         const effect = (section.cards || []).filter(card => /效果|件套|精炼|特效/.test(`${card.name}${card.text}`))
-        return effect.length
-          ? { ...section, text: '', cards: effect }
-          : { ...section, text: clipText(section.text || '', 46), cards: [] }
+        return effect.length ? { ...section, text: '', cards: effect } : { ...section, cards: [] }
       }
       if (section.focus === 'ascension') return { ...section, groups: [], text: '' }
       return section
@@ -545,6 +552,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const source = focus?.id === 'detail'
       ? (entry.all || entry.sections || [])
       : (focus ? (entry.parts?.[focus.id] || []) : (entry.sections || []))
+    const shownAttrs = attrs && source.some(section => section.focus === 'profile' && !(section.cards || []).some(card => /效果|件套/.test(card.name)))
+      ? ''
+      : attrs
     const sections = source.map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
@@ -552,7 +562,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }).join('')
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)
-    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${attrs ? `<div class="attrs">${attrs}</div>` : ''}${sections}${links}`
+    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${shownAttrs ? `<div class="attrs">${shownAttrs}</div>` : ''}${sections}${links}`
   }
 
   focusLinks(entry) {

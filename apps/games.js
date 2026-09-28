@@ -21,7 +21,6 @@ import {
   channelOf, channelPattern, focusOf, gameOf,
   getGameEntry, listGame, mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
-import { clipText } from '../model/wiki.js'
 import { entryCss, groupsHtml, markText, resultCss, themeOf } from './wiki.js'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
@@ -49,8 +48,8 @@ const LAYOUT = {
   },
 }
 const OVERVIEW = {
-  sr: new Set(['profile', 'ascension', 'trace', 'effect', 'skill', 'set']),
-  zzz: new Set(['profile', 'ascension', 'skill', 'disk', 'set']),
+  sr: new Set(['profile', 'ascension', 'recommend', 'effect', 'set']),
+  zzz: new Set(['profile', 'ascension', 'recommend', 'effect', 'set']),
 }
 const GAME_CSS = `
 .board{display:grid;gap:12px}.board.cols-2{grid-template-columns:1fr 1fr}.board.cols-1{grid-template-columns:1fr}
@@ -59,7 +58,10 @@ const GAME_CSS = `
 .tile>div{display:flex;align-items:center;gap:16px}.tile .icons{display:flex;gap:8px;flex-shrink:0}
 .tile img{width:96px;height:96px;object-fit:contain;border-radius:18px;background:#fff}
 .tile b{color:var(--accent);font-size:28px;line-height:1.4}
-.tile p{margin-top:8px;color:#475569;font-size:24px;line-height:1.6;word-break:break-word}
+.tile p{margin-top:8px;color:#475569;font-size:24px;line-height:1.65;word-break:break-word}
+.tile p b.word{display:inline;font-weight:800}
+.tile.plain{grid-column:1/-1}
+.tile.plain p{color:#334155;font-size:26px}
 .tile p b{color:var(--accent)}
 .hero.art{align-items:flex-end}.hero.art .splash{width:280px;height:360px;object-fit:contain;object-position:center bottom;border-radius:20px;background:transparent}
 `
@@ -160,15 +162,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       ? entry.all || entry.sections || []
       : (focus
         ? entry.parts?.[focus.id] || []
-        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)).slice(0, 3))
+        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)))
+    const repeated = !focus && source.some(section => section.focus === 'profile')
     const sections = source.map(section => {
-      const shown = !focus && section.focus === 'profile'
-        ? { ...section, text: clipText(section.text || '', 46) }
-        : (!focus && section.focus === 'ascension' ? { ...section, groups: [], text: '' }
-          : (!focus && /推荐/.test(section.title) ? { ...section, cards: (section.cards || []).slice(0, 4).map(card => ({ ...card, text: '' })) } : section))
-      const layout = LAYOUT[key]?.[section.focus] || { columns: /推荐/.test(section.title) ? 2 : 1, showIcon: true }
+      const shown = !focus && section.focus === 'recommend'
+        ? { ...section, cards: (section.cards || []).slice(0, 6).map(card => ({ ...card, text: '' })) }
+        : (!focus && section.focus === 'ascension' ? { ...section, groups: (section.groups || []).filter(group => group.materials?.length).slice(0, 1), text: '' }
+          : section)
+      const layout = LAYOUT[key]?.[section.focus] || { columns: /推荐|套装|效果/.test(section.title) ? 2 : 1, showIcon: section.focus !== 'effect' && section.focus !== 'set' }
       const cards = boardHtml(shown.cards, layout)
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}</section>`
     }).join('')
     const links = !focus || focus.id === 'detail'
       ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => focusOf(key, id)?.name).filter(Boolean)
@@ -191,8 +194,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (command.rest && command.rest !== '帮助') return false
     const game = gameOf(command.key)
     const lines = command.key === 'sr'
-      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's影音 流萤', 's表情包']
-      : ['z妮可', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z影音 妮可', 'z壁纸']
+      ? ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's推荐 流萤', 's光锥 记一位星神的陨落', 's遗器 坠星启航地', 's影音 流萤', 's表情包']
+      : ['z爱丽丝', 'z立绘 爱丽丝', 'z技能 爱丽丝', 'z影画 爱丽丝', 'z突破 爱丽丝', 'z音擎 绯月银棺', 'z驱动盘 呼啸沙龙', 'z影音 爱丽丝', 'z壁纸']
     await e.reply([`${game.name}图鉴（${mark(game)} 前缀）`, ...lines].join('\n'))
     return true
   }

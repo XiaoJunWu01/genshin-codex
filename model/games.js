@@ -32,9 +32,9 @@ const CHANNEL_ALIASES = {
 const CHANNEL_SKIP = /攻略|成就|模拟宇宙|忘却之庭|虚构叙事|末日幻影|异相仲裁|逐光捡金|连战|活动/
 const MOTION = /\.(?:gif|webp)(?:$|\?)/i
 const ZZZ_CODES = {
-  ether: '以太', fire: '火', ice: '冰', electric: '电', physic: '物理', physics: '物理',
+  ether: '以太', fire: '火', ice: '冰', electric: '电', physic: '物理', physics: '物理', physical: '物理',
   wind: '风', frost: '烈霜', lumino: '流明', blade: '凛刃', ink: '玄墨',
-  support: '支援', attack: '强攻', stun: '击破', anomaly: '异常', defense: '防护',
+  support: '支援', attack: '强攻', stun: '击破', anomaly: '异常', abnormal: '异常', defense: '防护',
   rupture: '命破', guard: '锋御',
 }
 const CACHE_TTL = 30 * 60 * 1000
@@ -62,6 +62,7 @@ export const GAME_FOCUS = {
     { id: 'eidolon', name: '星魂', aliases: ['星魂'] },
     { id: 'ascension', name: '晋阶', aliases: ['晋阶', '突破', '养成', '材料'] },
     { id: 'effect', name: '效果', aliases: ['效果'] },
+    { id: 'recommend', name: '推荐', aliases: ['推荐', '配队', '配装'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
@@ -71,7 +72,8 @@ export const GAME_FOCUS = {
   zzz: [
     { id: 'skill', name: '技能', aliases: ['技能'] },
     { id: 'cinema', name: '影画', aliases: ['影画'] },
-    { id: 'ascension', name: '突破', aliases: ['突破', '养成', '材料'] },
+    { id: 'ascension', name: '突破', aliases: ['突破', '养成', '材料', '晋升'] },
+    { id: 'recommend', name: '推荐', aliases: ['推荐', '配队', '配装'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
@@ -261,7 +263,7 @@ function textOf(value) {
 }
 
 function section(title, lines = [], cards = [], focus = '', groups = [], images = [], videos = []) {
-  const text = lines.map(textOf).filter(Boolean)
+  const text = lines.map(textOf).filter(line => line && line !== '暂无')
   const list = cards.filter(card => card?.name || card?.text)
   const levels = groups.filter(group => group?.materials?.length || group?.note)
   const shots = images.filter(item => item?.src)
@@ -353,12 +355,16 @@ function formatCharacter(game, content) {
     const [key, ...rest] = line.split('：')
     return { key, value: rest.join('：') }
   })
-  const overview = sections.filter(item => !item.focus || /profile|ascension|trace|skill|set/.test(item.focus))
+  const overview = [
+    ...sections.filter(item => item.focus === 'profile'),
+    ...sections.filter(item => item.focus === 'ascension'),
+    ...sections.filter(item => item.focus === 'recommend'),
+  ]
   return {
     id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
     icon: content.icon || info.icon || '', tags: Object.values(filters).flat(), attrs,
     theme: { element: filters['属性']?.[0] || '', path: filters['命途']?.[0] || '', rarity: filters['星级']?.[0] || '', portrait: portraits[0]?.src || '' },
-    sections: overview.slice(0, 3),
+    sections: overview,
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts, url: `${game.site}/content/${content.id}/detail`,
   }
@@ -404,7 +410,7 @@ function formatTabs(game, content) {
     id: String(content.id), name: shortName(content.title) || '未命名词条', icon: content.icon || '',
     tags: attrs.map(item => item.value), attrs,
     theme: { element: pick('弱点'), path: pick('命途'), rarity: pick('稀有度'), portrait: portraits[0]?.src || '' },
-    sections: sections.filter(item => !item.focus || /profile|ascension|effect|skill|set/.test(item.focus)).slice(0, 3),
+    sections: sections.filter(item => item.focus === 'effect' || item.focus === 'ascension' || item.focus === 'set'),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'), motions, portraits, videos: [], parts,
     url: `${game.site}/content/${content.id}/detail`,
   }
@@ -442,12 +448,24 @@ function formatWiki(game, page) {
       const id = component.component_id || ''
       const title = module.name || ''
       if (id === 'role_base_info') {
-        const facts = [['属性', data.role_attribute], ['特性', data.role_profession], ['稀有度', data.grade]]
-          .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
+        const facts = [
+          ['属性', data.role_attribute],
+          ['特性', data.role_profession],
+          ['稀有度', data.grade],
+          ['阵营', data.addition_text],
+          ...(data.custom_field || []).map(item => [item.key, item.value]),
+        ].map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value && !/^https?:/i.test(value))
           .map(([key, value]) => `${key}：${value}`)
         profile.push(...facts, ...baseLines(data.attr))
         if (data.tachie_pc || data.tachie_m) portraits.push({ name: '角色立绘', src: data.tachie_pc || data.tachie_m })
         remember(sections, parts, section(title || '基础资料', facts, [], 'profile'))
+      } else if (id === 'rich_row_base_info' && /角色/.test(JSON.stringify(data.rich_text || ''))) {
+        const intro = stripHtml(data.rich_text)
+          .replace(/【角色TAG】\s*[：:]/g, '定位：')
+          .replace(/【角色详情】\s*[：:]/g, '\n简介：')
+          .replace(/[ \t]+\n/g, '\n')
+        profile.push(...intro.split('\n').filter(Boolean))
+        remember(sections, parts, section('角色简介', [intro], [], 'profile'))
       } else if (id === 'material_base_info') {
         const facts = [['稀有度', data.grade], ['类型', data.type]]
           .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
@@ -474,8 +492,21 @@ function formatWiki(game, page) {
         remember(sections, parts, section(named(title, '驱动盘'), [], cards, 'disk'))
       } else if (id === 'double_col_table' || id === 'multi_table') {
         const sample = tableSample(data)
+        const headers = (data.tables || []).flatMap(table => table.header || []).map(textOf).join(' ')
         if (/信赖|领取/.test(sample)) {
           remember(sections, parts, section(named(title, '信赖奖励'), [], [], 'ascension', rewardGroups(data)))
+        } else if (/二件套|四件套/.test(headers)) {
+          const cards = (data.tables || []).flatMap(table => (table.header || []).map((name, index) => ({
+            name: textOf(name),
+            text: stripHtml((table.row?.[0] || [])[index] || ''),
+          }))).filter(item => item.name && item.text)
+          remember(sections, parts, section('套装效果', [], cards, 'set'))
+        } else if (/推荐/.test(headers)) {
+          const cards = tableCards(data).map(card => ({ ...card, group: '' })).filter(card => card.name !== '默认标题')
+          remember(sections, parts, section('推荐角色', [], cards, 'recommend'))
+        } else if (/音擎效果|驱动盘效果/.test(headers)) {
+          const text = (data.tables || []).flatMap(table => (table.row || []).flatMap(row => (Array.isArray(row) ? row : Object.values(row)).map(stripHtml))).filter(item => item && item !== '暂无')
+          remember(sections, parts, section('效果', text, [], 'effect'))
         } else {
           const cards = tableCards(data)
           const names = cards.slice(0, 2).map(item => item.name).join(' ')
@@ -488,15 +519,16 @@ function formatWiki(game, page) {
         const focus = 'portrait'
         remember(sections, parts, section(named(title, '展示'), [], [], focus, [], shots.filter(shot => !motionOf(shot.src))))
       } else if (id === 'collapse_panel' || id === 'good_desc') {
-        const focus = /故事|印象|CV/.test(title) ? 'story' : ''
+        const focus = /故事|印象|CV/.test(title) ? 'story' : (/效果|描述/.test(title) ? 'effect' : '')
         const clips = videosFromHtml(data.rich_text || data.desc)
         videos.push(...clips)
         const cards = cardsFromHtml(data.rich_text)
+        const plain = stripHtml(data.rich_text || data.desc || '')
         const block = clips.length
           ? section(named(title, '视频'), [], [], 'video', [], [], clips)
-          : cards.length
+          : cards.length && focus !== 'effect'
             ? section(named(title, '详情'), [], cards.slice(0, 8), focus)
-            : section(named(title, '详情'), [data.rich_text || data.desc || ''], [], focus)
+            : section(named(title, focus === 'effect' ? '效果' : '详情'), plain && plain !== '暂无' ? [plain] : [], [], focus)
         remember(sections, parts, block)
       }
     }
@@ -511,12 +543,17 @@ function formatWiki(game, page) {
     attrs.push({ key, value })
   }
   const pick = name => attrs.find(item => item.key === name)?.value || ''
+  const agent = sections.some(item => item.title === '技能' || item.title === '角色简介')
+  const disk = sections.some(item => item.focus === 'disk' || item.focus === 'set')
+  const overview = agent
+    ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id))
+    : ['effect', 'set', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'set' || item.title === '套装效果')))
   return {
     id: String(page.id), name: shortName(page.name) || '未命名词条', icon: page.icon_url || '',
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
     theme: { element: pick('属性'), weapon: pick('特性') || pick('类型'), rarity: pick('稀有度'), faction: pick('阵营'), portrait: portraits[0]?.src || '' },
     filters: {},
-    sections: sections.filter(item => !item.focus || /profile|ascension|skill|disk|set/.test(item.focus)).slice(0, 3),
+    sections: overview.length ? overview : sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait' && item.focus !== 'video').slice(0, 3),
     all: sections.filter(item => item.focus !== 'story' && item.focus !== 'portrait'),
     motions, portraits, videos, parts,
     url: `${game.site}/content/${page.id}/detail`,
