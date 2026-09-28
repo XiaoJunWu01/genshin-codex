@@ -774,10 +774,21 @@ function cleanLabel(value) {
   return stripHtml(value).replace(/默认标题/g, '').replace(/^[：:|｜\s]+|[：:|｜\s]+$/g, '').trim()
 }
 
+function voiceActors(html) {
+  const labels = { 中: '中', 汉: '中', 日: '日', 英: '英', 韩: '韩' }
+  const found = []
+  for (const line of stripHtml(html).split('\n')) {
+    const matched = line.trim().match(/^([中汉日英韩])[语文]?[：:]\s*(.+)$/)
+    if (!matched?.[2].trim()) continue
+    found.push(`${labels[matched[1]]}：${matched[2].trim()}`)
+  }
+  return found
+}
+
 function parseTables(data) {
   const lines = []
   const cards = []
-  for (const table of (data?.tables || []).slice(0, 2)) {
+  for (const table of data?.tables || []) {
     const title = stripHtml(table?.tab_name || table?.title || table?.name || '')
     const rows = table?.row || table?.rows || table?.list || table?.data || []
     const visual = rows.some(row => {
@@ -804,7 +815,7 @@ function parseTables(data) {
       continue
     }
 
-    const limit = /推荐/.test(title) ? 6 : 8
+    const limit = /推荐/.test(title) ? 8 : 8
     let shown = 0
     for (const row of rows) {
       if (shown >= limit) break
@@ -926,6 +937,8 @@ function parseComponent(component, moduleName) {
     return { title: cards.length ? '套装效果' : title, lines: [], cards }
   }
   if (id === 'collapse_panel' || id === 'rich_text') {
+    const voices = /角色CV|配音/.test(title) ? voiceActors(data?.rich_text) : []
+    if (voices.length) return { title: '配音', lines: voices, focus: 'voice' }
     const video = videoFromHtml(data?.rich_text)
     if (video) return { title: title || '角色视频', lines: [], videos: [video] }
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
@@ -1049,7 +1062,7 @@ function focusOf(title = '', images = []) {
   if (/天赋/.test(title)) return 'talent'
   if (/命之座|命座/.test(title)) return 'constellation'
   if (ASCENSION_TITLE.test(title)) return 'ascension'
-  if (/故事|神之眼|更多描述|角色详细|角色CV|配音/.test(title)) return 'story'
+  if (/故事|神之眼|更多描述|角色详细/.test(title)) return 'story'
   if (/推荐/.test(title)) return 'recommend'
   if (PROFILE_TITLE.test(title)) return 'profile'
   if (/展示/.test(title) && images.length) {
@@ -1129,12 +1142,11 @@ export function formatWikiEntry(page) {
   const weapon = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'equipment_base_info'))
   const artifact = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'artifact_list_v2'))
   const wanted = character
-    ? ['profile', 'talent', 'ascension', 'recommend']
+    ? ['profile', 'talent', 'ascension', 'recommend', 'voice']
     : (weapon || artifact ? ['profile', 'ascension', 'recommend'] : ['profile', 'ascension'])
   const picked = []
   for (const id of wanted) {
-    const found = sections.find(section => section.focus === id)
-    if (found) picked.push(found)
+    for (const found of sections.filter(section => section.focus === id)) picked.push(found)
   }
   if (weapon && !picked.some(section => section.focus === 'recommend')) {
     picked.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], total: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })

@@ -90,6 +90,17 @@ function placeholderGroup(value) {
   return value && !/默认标题|暂无/.test(value) ? value : ''
 }
 
+function profileGrid(text) {
+  const rows = String(text || '').split('\n').map(line => {
+    const index = line.indexOf('：')
+    if (index <= 0) return ''
+    return `<div><em>${escapeHtml(line.slice(0, index))}</em><b>${escapeHtml(line.slice(index + 1))}</b></div>`
+  }).filter(Boolean)
+  if (!rows.length) return ''
+  const height = Math.ceil(rows.length / 2)
+  return `<div class="attrs" style="grid-template-rows:repeat(${height},auto)">${rows.join('')}</div>`
+}
+
 function talentTotal(groups) {
   const order = []
   const merged = new Map()
@@ -216,10 +227,12 @@ export const entryCss = `
 .facts b{color:var(--accent);font-size:30px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tags span{padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-size:22px;font-weight:700}
-.attrs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+.attrs{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:12px;margin-top:14px}
 .attrs div{padding:16px 20px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:18px;border-left:6px solid var(--accent)}
-.attrs em{display:block;color:var(--accent);font-style:normal;font-size:22px;font-weight:800}
-.attrs b{color:var(--accent);font-size:30px;line-height:1.45}
+.attrs em{display:block;color:#64748b;font-style:normal;font-size:22px;font-weight:700}
+.attrs b{display:block;margin-top:4px;color:var(--ink);font-size:28px;line-height:1.4}
+.voices{display:flex;flex-wrap:wrap;gap:10px}
+.voices span{padding:10px 18px;border-radius:999px;background:var(--soft);color:var(--ink);font-size:24px;font-weight:700}
 section{margin-top:14px;padding:20px;border:1px solid rgba(15,23,42,.08);border-radius:20px;background:#fff}
 section h3{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:var(--ink);font-size:32px}
 section h3::before{content:\"\";width:6px;height:22px;border-radius:6px;background:var(--accent)}
@@ -587,7 +600,20 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const brief = section => {
       if (focus) return section
       if (section.focus === 'recommend') {
-        return { ...section, cards: (section.cards || []).slice(0, 6).map(card => ({ ...card, text: '', group: placeholderGroup(card.group) })) }
+        const cards = section.cards || []
+        const kept = []
+        const count = new Map()
+        for (const card of cards) {
+          const group = placeholderGroup(card.group) || '推荐'
+          const used = count.get(group) || 0
+          if (used >= 6) continue
+          count.set(group, used + 1)
+          kept.push({ ...card, text: '', group })
+        }
+        return { ...section, cards: kept }
+      }
+      if (section.focus === 'voice') {
+        return { ...section, title: '配音', cards: (section.lines || []).map(line => ({ name: line })) }
       }
       if (section.focus === 'talent') {
         const total = talentTotal(section.groups)
@@ -605,17 +631,23 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const source = focus?.id === 'detail'
       ? (entry.all || entry.sections || [])
       : (focus ? (entry.parts?.[focus.id] || []) : (entry.sections || []))
-    const shownAttrs = attrs && source.some(section => section.focus === 'profile' && !(section.cards || []).some(card => /效果|件套/.test(card.name)))
-      ? ''
-      : attrs
+    const shownAttrs = attrs && !source.some(section => section.focus === 'profile')
+      ? `<div class="attrs">${attrs}</div>`
+      : ''
     const sections = source.map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards, shown.focus === 'talent' || shown.focus === 'constellation' ? 'stack' : '')}${groupsHtml(shown.groups, shown.total)}${shown.empty && !shown.cards?.length && !shown.groups?.length && !shown.total?.length ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}${pictures}</section>`
+      const profile = shown.focus === 'profile' && !(shown.cards || []).length ? profileGrid(shown.text) : ''
+      const voices = shown.focus === 'voice' && !focus
+        ? `<div class="voices">${(shown.lines || []).map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div>`
+        : ''
+      const prose = profile || voices ? '' : (shown.text ? `<p>${markText(shown.text)}</p>` : '')
+      const body = `${prose}${profile}${voices}${cardsHtml(shown.cards, shown.focus === 'talent' || shown.focus === 'constellation' ? 'stack' : '')}${groupsHtml(shown.groups, shown.total)}`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${body}${shown.empty && !shown.cards?.length && !shown.groups?.length && !shown.total?.length && !voices ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}${pictures}</section>`
     }).join('')
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)
-    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${shownAttrs ? `<div class="attrs">${shownAttrs}</div>` : ''}${sections}${links}`
+    return `<div class="hero">${icon}<div class="hero-copy"><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${shownAttrs}${sections}${links}`
   }
 
   focusLinks(entry) {
