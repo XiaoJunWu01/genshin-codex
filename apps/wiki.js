@@ -98,7 +98,19 @@ function profileGrid(text) {
   }).filter(Boolean)
   if (!rows.length) return ''
   const height = Math.ceil(rows.length / 2)
-  return `<div class="attrs" style="grid-template-rows:repeat(${height},auto)">${rows.join('')}</div>`
+  return `<div class="profile" style="grid-template-rows:repeat(${height},auto)">${rows.join('')}</div>`
+}
+
+function scalingHtml(scaling) {
+  const levels = scaling?.levels || []
+  const rows = scaling?.rows || []
+  if (!levels.length || !rows.length) return ''
+  const head = levels.map(level => `<th>${escapeHtml(level)}</th>`).join('')
+  const body = rows.map(row => {
+    const cells = levels.map((_, index) => `<td>${escapeHtml(row.values?.[index] || '')}</td>`).join('')
+    return `<tr><th>${escapeHtml(row.name)}</th>${cells}</tr>`
+  }).join('')
+  return `<div class="scale"><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
 }
 
 function talentTotal(groups) {
@@ -133,7 +145,8 @@ export function cardsHtml(cards, layout = '') {
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`
       : (effects || stacked ? '' : '<span class="placeholder"></span>')
     const text = card.text ? (stacked ? skillText(card.text) : `<p>${markText(card.text)}</p>`) : ''
-    return `${group}<div class="${stacked ? 'skill' : 'equip'}">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
+    const table = stacked ? scalingHtml(card.scaling) : ''
+    return `${group}<div class="${stacked ? 'skill' : 'equip'}">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}${table}</div></div>`
   }).join('')}</div>`
 }
 
@@ -227,6 +240,10 @@ export const entryCss = `
 .facts b{color:var(--accent);font-size:30px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tags span{padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-size:22px;font-weight:700}
+.profile{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(3,auto);margin-top:4px}
+.profile div{display:flex;align-items:baseline;gap:14px;min-width:0;padding:11px 4px;border-bottom:1px solid rgba(15,23,42,.08)}
+.profile em{flex:0 0 5.2em;color:#64748b;font-style:normal;font-size:24px;font-weight:700}
+.profile b{min-width:0;color:var(--ink);font-size:26px;font-weight:700;line-height:1.4}
 .attrs{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(3,auto);gap:12px;margin-top:14px}
 .attrs div{padding:16px 20px;background:#fff;border:1px solid rgba(15,23,42,.07);border-radius:18px;border-left:6px solid var(--accent)}
 .attrs em{display:block;color:#64748b;font-style:normal;font-size:22px;font-weight:700}
@@ -266,6 +283,13 @@ section p b.word{font-weight:800}
 .skill p b{display:inline;color:var(--accent);font-size:26px;font-weight:800}
 .skill blockquote{margin-top:14px;padding:12px 16px;border-left:5px solid var(--accent);border-radius:0 14px 14px 0;background:#fff}
 .skill blockquote p{margin-top:6px;color:#64748b;font-size:23px;line-height:1.7}
+.scale{margin-top:14px;overflow:hidden;border-radius:14px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.scale table{width:100%;border-collapse:collapse;table-layout:fixed}
+.scale th,.scale td{padding:9px 4px;border-bottom:1px solid rgba(15,23,42,.06);text-align:center;font-size:20px;font-weight:700;line-height:1.35;word-break:break-all}
+.scale thead th{color:#64748b;background:var(--soft);font-size:18px}
+.scale tbody th{width:18%;color:var(--ink);text-align:left;padding-left:12px;font-size:21px}
+.scale td{color:var(--accent)}
+.scale tr:last-child th,.scale tr:last-child td{border-bottom:0}
 .group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:26px;font-weight:800}
 .equip{display:flex;align-items:center;gap:16px;min-height:96px;padding:16px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .equip .icons{display:flex;gap:8px;flex-shrink:0}
@@ -613,7 +637,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         return { ...section, cards: kept }
       }
       if (section.focus === 'voice') {
-        return { ...section, title: '配音', cards: (section.lines || []).map(line => ({ name: line })) }
+        return { ...section, title: '配音', cards: [], lines: section.lines?.length ? section.lines : (section.cards || []).map(card => card.name).filter(Boolean) }
       }
       if (section.focus === 'talent') {
         const total = talentTotal(section.groups)
@@ -630,7 +654,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }
     const source = focus?.id === 'detail'
       ? (entry.all || entry.sections || [])
-      : (focus ? (entry.parts?.[focus.id] || []) : (entry.sections || []))
+      : (focus?.id === 'profile'
+        ? [...(entry.parts?.profile || []), ...(entry.parts?.voice || [])]
+        : (focus ? (entry.parts?.[focus.id] || []) : (entry.sections || [])))
     const shownAttrs = attrs && !source.some(section => section.focus === 'profile')
       ? `<div class="attrs">${attrs}</div>`
       : ''
@@ -638,7 +664,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
       const profile = shown.focus === 'profile' && !(shown.cards || []).length ? profileGrid(shown.text) : ''
-      const voices = shown.focus === 'voice' && !focus
+      const voices = shown.focus === 'voice'
         ? `<div class="voices">${(shown.lines || []).map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div>`
         : ''
       const prose = profile || voices ? '' : (shown.text ? `<p>${markText(shown.text)}</p>` : '')

@@ -9,7 +9,8 @@ function boardHtml(cards, { columns = 2, showIcon = true } = {}) {
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>` : ''
     const text = card.text ? `<p>${markText(card.text)}</p>` : ''
-    return `${group}<article class="${icon ? 'tile' : 'tile plain'}"><div>${icon}<b>${escapeHtml(card.name || '')}</b></div>${text}</article>`
+    const table = scalingHtml(card.scaling)
+    return `${group}<article class="${icon ? 'tile' : 'tile plain'}"><div>${icon}<b>${escapeHtml(card.name || '')}</b></div>${text}${table}</article>`
   }).join('')}</div>`
 }
 
@@ -22,6 +23,26 @@ import {
   getGameEntry, listGame, mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../model/games.js'
 import { entryCss, groupsHtml, markText, resultCss, themeOf } from './wiki.js'
+
+function profileHtml(lines) {
+  const rows = (lines || []).flatMap(line => {
+    const index = String(line).indexOf('：')
+    if (index <= 0) return []
+    return [`<div><em>${escapeHtml(line.slice(0, index))}</em><b>${escapeHtml(line.slice(index + 1))}</b></div>`]
+  })
+  if (!rows.length) return ''
+  const height = Math.ceil(rows.length / 2)
+  return `<div class="profile" style="grid-template-rows:repeat(${height},auto)">${rows.join('')}</div>`
+}
+
+function scalingHtml(scaling) {
+  const levels = scaling?.levels || []
+  const rows = (scaling?.rows || []).filter(row => (row.values || []).some(Boolean))
+  if (levels.length < 2 || !rows.length) return ''
+  const head = levels.map(level => `<th>${escapeHtml(level)}</th>`).join('')
+  const body = rows.map(row => `<tr><th>${escapeHtml(row.name)}</th>${levels.map((_, index) => `<td>${escapeHtml(row.values?.[index] || '')}</td>`).join('')}</tr>`).join('')
+  return `<div class="scale"><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
+}
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const sessions = new Map()
@@ -67,6 +88,19 @@ const GAME_CSS = `
 .board.cols-1 .tile p{margin-top:0}
 .tile.plain p{color:#334155;font-size:26px}
 .tile p b{color:var(--accent)}
+.profile{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;margin-top:4px}
+.profile div{display:flex;align-items:baseline;gap:14px;min-width:0;padding:11px 4px;border-bottom:1px solid rgba(15,23,42,.08)}
+.profile em{flex:0 0 5.2em;color:#64748b;font-style:normal;font-size:24px;font-weight:700}
+.profile b{min-width:0;color:var(--ink);font-size:26px;font-weight:700;line-height:1.4}
+.voices{display:flex;flex-wrap:wrap;gap:10px}
+.voices span{padding:10px 18px;border-radius:999px;background:var(--soft);color:var(--ink);font-size:24px;font-weight:700}
+.scale{margin-top:14px;overflow:hidden;border-radius:14px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.scale table{width:100%;border-collapse:collapse;table-layout:fixed}
+.scale th,.scale td{padding:9px 4px;border-bottom:1px solid rgba(15,23,42,.06);text-align:center;font-size:20px;font-weight:700;line-height:1.35;word-break:break-all}
+.scale thead th{color:#64748b;background:var(--soft);font-size:18px}
+.scale tbody th{width:18%;color:var(--ink);text-align:left;padding-left:12px;font-size:21px}
+.scale td{color:var(--accent)}
+.scale tr:last-child th,.scale tr:last-child td{border-bottom:0}
 .hero.art{align-items:flex-end}.hero.art .splash{width:280px;height:360px;object-fit:contain;object-position:center bottom;border-radius:20px;background:transparent}
 `
 
@@ -164,9 +198,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const tags = (entry.tags || []).filter(tag => !used.has(tag)).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
     const source = focus?.id === 'detail'
       ? entry.all || entry.sections || []
-      : (focus
-        ? entry.parts?.[focus.id] || []
-        : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus)))
+      : (focus?.id === 'profile'
+        ? [...(entry.parts?.profile || []), ...(entry.parts?.voice || [])]
+        : (focus
+          ? entry.parts?.[focus.id] || []
+          : (entry.sections || []).filter(section => !section.focus || OVERVIEW[key]?.has(section.focus) || section.focus === 'voice')))
     const repeated = !focus && source.some(section => section.focus === 'profile')
     const sections = source.map(section => {
       const shown = !focus && section.focus === 'recommend'
@@ -175,7 +211,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           : section)
       const layout = LAYOUT[key]?.[section.focus] || { columns: /推荐|套装|效果/.test(section.title) ? 2 : 1, showIcon: section.focus !== 'effect' && section.focus !== 'set' }
       const cards = boardHtml(shown.cards, layout)
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}${shown.empty && !cards ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}</section>`
+      const profile = shown.focus === 'profile' ? profileHtml(shown.lines) : ''
+      const voices = shown.focus === 'voice'
+        ? `<div class="voices">${(shown.lines || []).map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div>` : ''
+      const prose = profile || voices ? '' : (shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : '')
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${prose}${profile}${voices}${groupsHtml(shown.groups, shown.total)}${cards}${shown.empty && !cards && !voices ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}</section>`
     }).join('')
     const links = !focus || focus.id === 'detail'
       ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => focusOf(key, id)?.name).filter(Boolean)

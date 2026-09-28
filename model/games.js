@@ -64,6 +64,7 @@ export const GAME_FOCUS = {
     { id: 'effect', name: '效果', aliases: ['效果'] },
     { id: 'recommend', name: '推荐', aliases: ['推荐', '配队', '配装'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
+    { id: 'voice', name: '配音', aliases: ['配音', '声优', 'CV'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
     { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
@@ -75,6 +76,7 @@ export const GAME_FOCUS = {
     { id: 'ascension', name: '突破', aliases: ['突破', '养成', '材料', '晋升'] },
     { id: 'recommend', name: '推荐', aliases: ['推荐', '配队', '配装'] },
     { id: 'profile', name: '资料', aliases: ['资料', '信息'] },
+    { id: 'voice', name: '配音', aliases: ['配音', '声优', 'CV'] },
     { id: 'story', name: '故事', aliases: ['故事', '背景'] },
     { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
     { id: 'video', name: '视频', aliases: ['视频', 'pv', 'PV', '动画'] },
@@ -327,11 +329,13 @@ function formatCharacter(game, content) {
       } else if (component.componentId === 'trace_graph') {
         const cards = (data.points || []).flatMap(point => {
           const group = textOf(point.tag || point.name)
+          const scaling = traceScaling(point.tableData)
           return (point.subList || []).map(item => ({
             name: textOf(item.subTitle) || textOf(point.name).split('/')[0],
             text: stripHtml(item.subDesc || item.desc),
             icon: stillOf(item.image),
             group,
+            scaling,
           }))
         }).filter(item => item.name && item.text)
         const skills = cards.filter(card => /普攻|战技|终结技|天赋|秘技|额外能力/.test(card.group))
@@ -342,6 +346,13 @@ function formatCharacter(game, content) {
         const cards = cardsFromHtml(data.richText)
         const limit = focus === 'eidolon' ? cards.length : /推荐/.test(module.name) ? 4 : 8
         remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, [data.richText], [], focus))
+      } else if (component.componentId === 'role_voice') {
+        const voices = (data.list || []).map(item => {
+          const label = textOf(item.tabName)
+          const actor = textOf(item.cvName)
+          return label && actor ? `${label}：${actor}` : ''
+        }).filter(Boolean)
+        remember(sections, parts, section('配音', voices, [], 'voice'))
       } else if (component.componentId === 'character_story') {
         const lines = (data.list || []).map(item => [textOf(item.tabName), textOf(item.desc)].filter(Boolean).join('\n'))
         remember(sections, parts, section(module.name || '角色故事', lines, [], 'story'))
@@ -359,6 +370,7 @@ function formatCharacter(game, content) {
     ...sections.filter(item => item.focus === 'profile'),
     ...sections.filter(item => item.focus === 'ascension'),
     ...sections.filter(item => item.focus === 'recommend'),
+    ...sections.filter(item => item.focus === 'voice'),
   ]
   return {
     id: String(content.id), name: shortName(content.title || info.name) || '未命名词条',
@@ -427,6 +439,66 @@ function blocksOf(html) {
   return blocks
 }
 
+function traceScaling(table) {
+  const headers = (table?.headers || []).map(textOf)
+  const rows = table?.rows || []
+  if (headers.length < 2 || !rows.length) return null
+  return {
+    levels: rows.map(row => textOf(row?.[0])).filter(Boolean),
+    rows: headers.slice(1).map((name, index) => ({
+      name,
+      values: rows.map(row => textOf(row?.[index + 1])),
+    })).filter(row => row.values.some(Boolean)),
+  }
+}
+
+function growthScaling(growth) {
+  const levels = []
+  const rows = []
+  for (const level of growth || []) {
+    const label = textOf(level.name)
+    if (!label || /总计/.test(label)) continue
+    const values = new Map()
+    for (const child of level.children || []) {
+      const cells = child.row?.[0] || []
+      for (const line of stripHtml(cells.join('\n')).split('\n')) {
+        const matched = line.match(/^(.+?)[：:]\s*(.+)$/)
+        if (!matched) continue
+        if (!values.has(matched[1])) values.set(matched[1], [])
+        values.get(matched[1]).push(matched[2])
+      }
+    }
+    if (!values.size) continue
+    levels.push(label)
+    for (const [name, list] of values) {
+      let row = rows.find(item => item.name === name)
+      if (!row) {
+        row = { name, values: [] }
+        rows.push(row)
+      }
+      while (row.values.length < levels.length - 1) row.values.push('')
+      row.values.push(list.join(' / '))
+    }
+  }
+  for (const row of rows) while (row.values.length < levels.length) row.values.push('')
+  return levels.length && rows.length ? { levels, rows } : null
+}
+
+function voiceLines(html) {
+  const labels = { 中: '中', 汉: '中', 日: '日', 英: '英', 韩: '韩' }
+  const found = []
+  const seen = new Set()
+  for (const line of stripHtml(html).split('\n')) {
+    const matched = line.trim().match(/^([中汉日英韩])(?:[文语])?(?:语|配)?\s*(?:CV|cv|配音)?\s*[：:]\s*(.+)$/)
+    const label = labels[matched?.[1] || '']
+    const actor = matched?.[2]?.trim()
+    if (!label || !actor || actor === '暂无' || seen.has(label)) continue
+    seen.add(label)
+    found.push(`${label}：${actor}`)
+  }
+  return found
+}
+
 function stillOf(src) {
   return src && !MOTION.test(src) ? src : ''
 }
@@ -478,7 +550,9 @@ function formatWiki(game, page) {
         remember(sections, parts, section(title || '基础资料', lines, [], 'profile'))
       } else if (id === 'role_talent') {
         const cards = (data.list || []).flatMap(item => item.children || []).map(item => ({
-          name: textOf(item.title), text: stripHtml(item.desc), icon: stillOf(item.icon),
+          name: [textOf(item.tab_name), textOf(item.title)].filter(Boolean).join(' · ') || textOf(item.title),
+          text: stripHtml(item.desc), icon: stillOf(item.icon),
+          scaling: growthScaling(item.growth),
         })).filter(item => item.name && item.text)
         for (const item of (data.list || []).flatMap(group => group.children || [])) {
           if (motionOf(item.animated_icon)) motions.push({ name: textOf(item.title) || '技能', src: item.animated_icon })
@@ -519,6 +593,11 @@ function formatWiki(game, page) {
         const focus = 'portrait'
         remember(sections, parts, section(named(title, '展示'), [], [], focus, [], shots.filter(shot => !motionOf(shot.src))))
       } else if (id === 'collapse_panel' || id === 'good_desc') {
+        const voices = /角色CV|配音/.test(title) && !/展示|语音/.test(title) ? voiceLines(data.rich_text || data.desc) : []
+        if (voices.length) {
+          remember(sections, parts, section('配音', voices, [], 'voice'))
+          continue
+        }
         const focus = /故事|印象|CV/.test(title) ? 'story' : (/效果|描述/.test(title) ? 'effect' : '')
         const clips = videosFromHtml(data.rich_text || data.desc)
         videos.push(...clips)
@@ -543,12 +622,14 @@ function formatWiki(game, page) {
     attrs.push({ key, value })
   }
   const pick = name => attrs.find(item => item.key === name)?.value || ''
-  const agent = sections.some(item => item.title === '技能' || item.title === '角色简介')
+  const agent = sections.some(item => item.focus === 'skill')
   const disk = sections.some(item => item.focus === 'disk' || item.focus === 'set')
   const engine = sections.some(item => item.focus === 'effect') && !agent && !disk
+  const voices = sections.filter(item => item.focus === 'voice')
   const overview = agent
     ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id))
     : ['effect', 'set', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'set' || item.title === '套装效果')))
+  if (agent) overview.push(...voices)
   if (engine && !overview.some(item => item.focus === 'recommend')) {
     overview.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })
   }

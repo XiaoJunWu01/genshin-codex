@@ -213,6 +213,7 @@ export const WIKI_FOCUS = [
   { id: 'story', name: '故事', aliases: ['故事', '背景', '简介', '介绍'] },
   { id: 'recommend', name: '推荐', aliases: ['推荐', '配装', '搭配'] },
   { id: 'profile', name: '资料', aliases: ['资料', '属性', '档案', '信息'] },
+  { id: 'voice', name: '配音', aliases: ['配音', '声优', 'CV'] },
   { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
   { id: 'showcase', name: '展示', aliases: ['展示', '角色展示', '动作', '待机'] },
   { id: 'detail', name: '全文', aliases: ['全文', '详细', '详情'] },
@@ -694,11 +695,13 @@ function parseTalent(data) {
   for (const item of data?.list || []) {
     const title = [item.tab_name, item.title].filter(Boolean).join(' · ')
     const desc = proseOf(item.desc)
-    if (title || desc) {
+    const scaling = scalingOf(item.attr)
+    if (title || desc || scaling) {
       talents.push({
         name: title,
         text: desc,
         icon: item.icon || '',
+        scaling,
       })
     }
 
@@ -712,6 +715,19 @@ function parseTalent(data) {
     }).filter(Boolean)
   }
   return { talents, materials }
+}
+
+function scalingOf(table) {
+  const header = table?.header || []
+  const rows = table?.row || []
+  if (header.length < 2 || !rows.length) return null
+  const levels = header.slice(1).map(cellText)
+  const body = rows.map(cells => {
+    const name = cellText(cells?.[0])
+    if (!name || /升级材料/.test(name)) return null
+    return { name, values: cells.slice(1).map(cellText) }
+  }).filter(row => row && row.values.some(Boolean))
+  return body.length ? { levels, rows: body } : null
 }
 
 function cellText(cell) {
@@ -777,10 +793,21 @@ function cleanLabel(value) {
 function voiceActors(html) {
   const labels = { 中: '中', 汉: '中', 日: '日', 英: '英', 韩: '韩' }
   const found = []
-  for (const line of stripHtml(html).split('\n')) {
-    const matched = line.trim().match(/^([中汉日英韩])[语文]?[：:]\s*(.+)$/)
-    if (!matched?.[2].trim()) continue
-    found.push(`${labels[matched[1]]}：${matched[2].trim()}`)
+  const seen = new Set()
+  const add = (label, name) => {
+    const actor = String(name || '').trim()
+    if (!actor || seen.has(label)) return
+    seen.add(label)
+    found.push(`${label}：${actor}`)
+  }
+  const source = String(html ?? '')
+  for (const line of stripHtml(source).split('\n')) {
+    const matched = line.trim().match(/^([中汉日英韩])(?:[文语])?(?:语)?\s*(?:CV|cv|配音)?\s*[：:]\s*(.+)$/)
+    if (matched) add(labels[matched[1]], matched[2])
+  }
+  if (found.length >= 2) return found
+  for (const match of source.matchAll(/([中汉日英韩])(?:[文语])?(?:语)?\s*(?:CV|cv|配音)?\s*[：:]\s*([^<\n]+)/g)) {
+    add(labels[match[1]], stripHtml(match[2]))
   }
   return found
 }
@@ -938,7 +965,7 @@ function parseComponent(component, moduleName) {
   }
   if (id === 'collapse_panel' || id === 'rich_text') {
     const voices = /角色CV|配音/.test(title) ? voiceActors(data?.rich_text) : []
-    if (voices.length) return { title: '配音', lines: voices, focus: 'voice' }
+    if (voices.length) return { title: '配音', lines: voices, cards: voices.map(line => ({ name: line })), focus: 'voice' }
     const video = videoFromHtml(data?.rich_text)
     if (video) return { title: title || '角色视频', lines: [], videos: [video] }
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
@@ -1060,6 +1087,7 @@ const ASCENSION_TITLE = /突破|成长数值|升级材料/
 
 function focusOf(title = '', images = []) {
   if (/天赋/.test(title)) return 'talent'
+  if (/角色CV|配音/.test(title) && !/展示|语音/.test(title)) return 'voice'
   if (/命之座|命座/.test(title)) return 'constellation'
   if (ASCENSION_TITLE.test(title)) return 'ascension'
   if (/故事|神之眼|更多描述|角色详细/.test(title)) return 'story'
@@ -1141,13 +1169,15 @@ export function formatWikiEntry(page) {
   const character = isCharacterPage(page)
   const weapon = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'equipment_base_info'))
   const artifact = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'artifact_list_v2'))
+  const voices = sections.filter(section => section.focus === 'voice')
   const wanted = character
-    ? ['profile', 'talent', 'ascension', 'recommend', 'voice']
+    ? ['profile', 'talent', 'ascension', 'recommend']
     : (weapon || artifact ? ['profile', 'ascension', 'recommend'] : ['profile', 'ascension'])
   const picked = []
   for (const id of wanted) {
     for (const found of sections.filter(section => section.focus === id)) picked.push(found)
   }
+  if (character) picked.push(...voices)
   if (weapon && !picked.some(section => section.focus === 'recommend')) {
     picked.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], total: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })
   }
@@ -1165,7 +1195,7 @@ export function formatWikiEntry(page) {
     portraits,
     motions,
     videos,
-    parts: Object.fromEntries(['talent', 'constellation', 'ascension', 'story', 'profile', 'recommend', 'portrait', 'showcase']
+    parts: Object.fromEntries(['talent', 'constellation', 'ascension', 'story', 'profile', 'recommend', 'voice', 'portrait', 'showcase']
       .map(id => [id, sections.filter(section => section.focus === id)])
       .filter(([, list]) => list.length)),
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,

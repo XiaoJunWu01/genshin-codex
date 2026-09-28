@@ -43,12 +43,13 @@ function splitAliases(value) {
 function readPairs(file) {
   const text = fs.readFileSync(file, 'utf8')
   if (file.endsWith('.yaml') || file.endsWith('.yml')) return parseYaml(text)
-  const body = text.match(/export const \w+\s*=\s*\{([\s\S]*)\}\s*$/)?.[1] || ''
   const pairs = []
-  for (const line of body.split(/\r?\n/)) {
-    const matched = line.match(/^\s*(?:'([^']+)'|"([^"]+)"|([^:,'"]+))\s*:\s*'([^']*)'/)
-    if (!matched) continue
-    pairs.push([matched[1] || matched[2] || matched[3].trim(), splitAliases(matched[4])])
+  for (const block of text.matchAll(/export const \w+\s*=\s*\{([\s\S]*?)\n\}/g)) {
+    for (const line of block[1].split(/\r?\n/)) {
+      const matched = line.match(/^\s*(?:'([^']+)'|"([^"]+)"|([^:,'"]+))\s*:\s*'([^']*)'/)
+      if (!matched) continue
+      pairs.push([matched[1] || matched[2] || matched[3].trim(), splitAliases(matched[4])])
+    }
   }
   return pairs
 }
