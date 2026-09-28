@@ -613,7 +613,7 @@ function filtersOf(page) {
 function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = [], videos = []) {
   const content = (Array.isArray(lines) ? lines : [lines]).map(line => String(line || '').trim()).filter(Boolean)
   const materialGroups = (groups || []).filter(group => group.materials?.length)
-  const cardItems = (cards || []).filter(card => card?.name || card?.text)
+  const cardItems = (cards || []).filter(card => card?.name || card?.text || card?.icon)
   const pictures = (images || []).filter(item => item?.src)
   const clips = (videos || []).filter(item => item?.src)
   if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length && !clips.length) return
@@ -754,6 +754,15 @@ function splitConstellations(html) {
   }).filter(item => item.name)
 }
 
+function placeholderTitle(value) {
+  const text = stripHtml(value)
+  return text && !/默认标题|暂无/.test(text) ? text : ''
+}
+
+function cleanLabel(value) {
+  return stripHtml(value).replace(/默认标题/g, '').replace(/^[：:|｜\s]+|[：:|｜\s]+$/g, '').trim()
+}
+
 function parseTables(data) {
   const lines = []
   const cards = []
@@ -770,7 +779,7 @@ function parseTables(data) {
         return cells.flatMap(cell => imagesFromHtml(cell).map(src => ({ src, text: cellText(cell) })))
       }).filter(item => item.src && !/成长数据/.test(item.text))
       if (pictures.length) {
-        pictures.slice(0, 6).forEach(item => cards.push({ group: title, name: item.text || '推荐', icon: item.src }))
+        pictures.slice(0, 6).forEach(item => cards.push({ group: placeholderTitle(title), name: cleanLabel(item.text) || '推荐', icon: item.src }))
         continue
       }
       if (title && title !== '默认标题') lines.push(title)
@@ -800,17 +809,18 @@ function parseTables(data) {
       }
       const entries = entriesFromHtml(cells[0])
       const images = imagesFromHtml(cells[0])
+      const group = placeholderTitle(title)
       if (entries.length > 1) {
         const separator = stripHtml(cells[0]).includes('/') ? ' / ' : ' + '
         cards.push({
-          group: title,
+          group,
           name: entries.map(entry => entry.name).join(separator),
           icons: entries.map(entry => entry.icon).filter(Boolean),
           text: reason,
         })
       } else if (entries.length) {
         cards.push({
-          group: title,
+          group,
           name: entries[0].name,
           icon: entries[0].icon,
           text: reason,
@@ -818,14 +828,14 @@ function parseTables(data) {
       } else if (images.length === 1 && !/成长数据/.test(label)) {
         const text = cellText(cells[0])
         cards.push({
-          group: title,
-          name: text,
+          group,
+          name: cleanLabel(text) || text,
           icon: images[0],
           text: reason,
         })
       } else {
         const text = cells.map(cellText).filter(Boolean).join('：')
-        if (text && !/成长数据/.test(text)) cards.push({ group: title, name: text })
+        if (text && !/成长数据/.test(text)) cards.push({ group, name: cleanLabel(text) || text })
       }
     }
   }
@@ -1075,6 +1085,7 @@ export function formatWikiEntry(page) {
     if (previous) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
+      previous.total = [...(previous.total || []), ...(parsed.total || [])]
       previous.images = [...(previous.images || []), ...(parsed.images || [])]
       previous.portraits = [...(previous.portraits || []), ...(parsed.portraits || [])]
       previous.videos = [...(previous.videos || []), ...(parsed.videos || [])]
@@ -1107,12 +1118,15 @@ export function formatWikiEntry(page) {
   const weapon = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'equipment_base_info'))
   const artifact = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'artifact_list_v2'))
   const wanted = character
-    ? ['profile', 'ascension', 'recommend']
+    ? ['profile', 'talent', 'ascension', 'recommend']
     : (weapon || artifact ? ['profile', 'ascension', 'recommend'] : ['profile', 'ascension'])
   const picked = []
   for (const id of wanted) {
     const found = sections.find(section => section.focus === id)
     if (found) picked.push(found)
+  }
+  if (weapon && !picked.some(section => section.focus === 'recommend')) {
+    picked.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], total: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })
   }
   const overview = picked.length ? picked : sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 3)
 

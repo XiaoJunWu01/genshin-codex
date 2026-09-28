@@ -3,7 +3,7 @@ function boardHtml(cards, { columns = 2, showIcon = true } = {}) {
   const items = cards || []
   if (!items.length) return ''
   return `<div class="board cols-${columns}">${items.map((card, index) => {
-    const group = card.group && card.group !== items[index - 1]?.group
+    const group = card.group && !/默认标题|暂无/.test(card.group) && card.group !== items[index - 1]?.group
       ? `<div class="group">${escapeHtml(card.group)}</div>` : ''
     const icons = showIcon ? (card.icons?.length ? card.icons : [card.icon]).filter(Boolean) : []
     const icon = icons.length
@@ -60,6 +60,7 @@ const GAME_CSS = `
 .tile b{color:var(--accent);font-size:28px;line-height:1.4}
 .tile p{margin-top:8px;color:#475569;font-size:24px;line-height:1.65;word-break:break-word}
 .tile p b.word{display:inline;font-weight:800}
+.tile p b{display:inline;color:var(--accent);font-weight:800}
 .tile.plain{grid-column:1/-1}
 .tile.plain p{color:#334155;font-size:26px}
 .tile p b{color:var(--accent)}
@@ -171,7 +172,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           : section)
       const layout = LAYOUT[key]?.[section.focus] || { columns: /推荐|套装|效果/.test(section.title) ? 2 : 1, showIcon: section.focus !== 'effect' && section.focus !== 'set' }
       const cards = boardHtml(shown.cards, layout)
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : ''}${groupsHtml(shown.groups, shown.total)}${cards}${shown.empty && !cards ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}</section>`
     }).join('')
     const links = !focus || focus.id === 'detail'
       ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => focusOf(key, id)?.name).filter(Boolean)

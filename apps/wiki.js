@@ -86,12 +86,34 @@ function getBackgroundImageUrl() {
   return fs.existsSync(filePath) ? pathToFileURLSafe(filePath) : ''
 }
 
+function placeholderGroup(value) {
+  return value && !/默认标题|暂无/.test(value) ? value : ''
+}
+
+function talentTotal(groups) {
+  const order = []
+  const merged = new Map()
+  for (const group of groups || []) {
+    for (const item of group.materials || []) {
+      const amount = Number(item.amount) || 0
+      const found = merged.get(item.name)
+      if (found) found.amount = String((Number(found.amount) || 0) + amount)
+      else {
+        const copy = { ...item, amount: amount ? String(amount) : '' }
+        merged.set(item.name, copy)
+        order.push(copy)
+      }
+    }
+  }
+  return order
+}
+
 export function cardsHtml(cards) {
   const items = cards || []
   if (!items.length) return ''
   const effects = items.every(card => !card.icon && !card.icons?.length)
   return `<div class="${effects ? 'effects' : 'equips'}">${items.map((card, index) => {
-    const group = card.group && card.group !== items[index - 1]?.group
+    const group = placeholderGroup(card.group) && placeholderGroup(card.group) !== placeholderGroup(items[index - 1]?.group)
       ? `<div class="group">${escapeHtml(card.group)}</div>`
       : ''
     const icons = (card.icons?.length ? card.icons : [card.icon]).filter(Boolean)
@@ -187,9 +209,9 @@ section{margin-top:14px;padding:20px;border:1px solid rgba(15,23,42,.08);border-
 section h3{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:var(--ink);font-size:32px}
 section h3::before{content:\"\";width:6px;height:22px;border-radius:6px;background:var(--accent)}
 section p{color:#334155;font-size:26px;line-height:1.7;word-break:break-word}
-section p b{color:var(--accent)}
+section p b{color:var(--accent);font-weight:800}
 section p b.word{font-weight:800}
-.effects .equip p b.word,.tile p b.word,.equip p b.word{display:inline;font-weight:800}
+.effects .equip p b,.tile p b,.equip p b,.level small b{display:inline;font-weight:800}
 .levels{display:flex;flex-direction:column;gap:6px}
 .level{padding:8px;border-radius:10px;background:var(--soft)}
 .level>b{display:block;margin-bottom:12px;color:var(--accent);font-size:26px}
@@ -200,6 +222,7 @@ section p b.word{font-weight:800}
 .mat b{color:var(--accent);font-size:24px;flex-shrink:0}
 .level small{display:block;margin-top:8px;color:#475569;font-size:22px;line-height:1.55}
 .level small b{color:var(--accent)}
+.empty{color:#64748b}
 .total{background:#fff;border:1px dashed var(--accent)}
 .effects{display:flex;flex-direction:column;gap:12px}
 .effects .equip{display:block;min-height:0;padding:18px 20px}
@@ -540,7 +563,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const brief = section => {
       if (focus) return section
       if (section.focus === 'recommend') {
-        return { ...section, cards: (section.cards || []).slice(0, 6).map(card => ({ ...card, text: '' })) }
+        return { ...section, cards: (section.cards || []).slice(0, 6).map(card => ({ ...card, text: '', group: placeholderGroup(card.group) })) }
+      }
+      if (section.focus === 'talent') {
+        const total = talentTotal(section.groups)
+        return total.length
+          ? { ...section, title: '天赋材料', text: '', cards: [], groups: [], total }
+          : { ...section, title: '天赋材料', text: '', cards: [], empty: '暂无天赋材料' }
       }
       if (section.focus === 'profile') {
         const effect = (section.cards || []).filter(card => /效果|件套|精炼|特效/.test(`${card.name}${card.text}`))
@@ -558,7 +587,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const sections = source.map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${pictures}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${shown.empty && !shown.cards?.length && !shown.groups?.length && !shown.total?.length ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}${pictures}</section>`
     }).join('')
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)

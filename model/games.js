@@ -262,14 +262,14 @@ function textOf(value) {
   return stripHtml(value).replace(/\s+/g, ' ').trim()
 }
 
-function section(title, lines = [], cards = [], focus = '', groups = [], images = [], videos = []) {
+function section(title, lines = [], cards = [], focus = '', groups = [], images = [], videos = [], empty = '') {
   const text = lines.map(textOf).filter(line => line && line !== '暂无')
-  const list = cards.filter(card => card?.name || card?.text)
+  const list = cards.filter(card => card?.name || card?.text || card?.icon)
   const levels = groups.filter(group => group?.materials?.length || group?.note)
   const shots = images.filter(item => item?.src)
   const clips = videos.filter(item => item?.page || item?.src)
-  if (!text.length && !list.length && !levels.length && !shots.length && !clips.length) return null
-  return { title, text: text.join('\n'), lines: text, cards: list, groups: levels, images: shots, videos: clips, focus }
+  if (!text.length && !list.length && !levels.length && !shots.length && !clips.length && !empty) return null
+  return { title, text: text.join('\n'), lines: text, cards: list, groups: levels, images: shots, videos: clips, focus, empty }
 }
 
 function cardsFromHtml(html) {
@@ -502,8 +502,8 @@ function formatWiki(game, page) {
           }))).filter(item => item.name && item.text)
           remember(sections, parts, section('套装效果', [], cards, 'set'))
         } else if (/推荐/.test(headers)) {
-          const cards = tableCards(data).map(card => ({ ...card, group: '' })).filter(card => card.name !== '默认标题')
-          remember(sections, parts, section('推荐角色', [], cards, 'recommend'))
+          const cards = tableCards(data).map(card => ({ ...card, group: '' })).filter(card => card.name && card.name !== '默认标题')
+          remember(sections, parts, section('推荐角色', [], cards, 'recommend', [], [], [], cards.length ? '' : '暂无推荐角色'))
         } else if (/音擎效果|驱动盘效果/.test(headers)) {
           const text = (data.tables || []).flatMap(table => (table.row || []).flatMap(row => (Array.isArray(row) ? row : Object.values(row)).map(stripHtml))).filter(item => item && item !== '暂无')
           remember(sections, parts, section('效果', text, [], 'effect'))
@@ -545,9 +545,13 @@ function formatWiki(game, page) {
   const pick = name => attrs.find(item => item.key === name)?.value || ''
   const agent = sections.some(item => item.title === '技能' || item.title === '角色简介')
   const disk = sections.some(item => item.focus === 'disk' || item.focus === 'set')
+  const engine = sections.some(item => item.focus === 'effect') && !agent && !disk
   const overview = agent
     ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id))
     : ['effect', 'set', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'set' || item.title === '套装效果')))
+  if (engine && !overview.some(item => item.focus === 'recommend')) {
+    overview.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })
+  }
   return {
     id: String(page.id), name: shortName(page.name) || '未命名词条', icon: page.icon_url || '',
     tags: attrs.map(item => item.value), attrs: attrs.slice(0, 8),
@@ -786,15 +790,16 @@ function baseLines(attr) {
 
 function tableCards(data) {
   return (data.tables || []).flatMap(table => {
-    const group = textOf(table.tab_name)
+    const group = named(textOf(table.tab_name), '')
     return (table.row || []).map(row => {
       const source = Array.isArray(row) ? row : Object.values(row || {})
       const icon = source.map(cell => String(cell).replace(/\\"/g, '"').match(/data-(?:image-url|entry-icon)="([^"]+)"/)?.[1] || '').find(Boolean) || ''
-      const textCells = source.map(cell => stripHtml(cell)).filter(Boolean)
-      if (textCells.length < 2) return { name: group, text: textCells[0] || '', icon, group: '' }
-      return { name: textCells[0] || '', text: textCells.slice(1).join('\n'), icon, group }
+      const textCells = source.map(cell => stripHtml(cell).replace(/默认标题/g, '').trim()).filter(Boolean)
+      if (!textCells.length) return null
+      if (textCells.length < 2) return { name: textCells[0], text: '', icon, group: '' }
+      return { name: textCells[0], text: textCells.slice(1).join('\n'), icon, group }
     })
-  }).filter(item => item.name && item.text)
+  }).filter(item => item && item.name && (item.text || item.icon))
 }
 
 
