@@ -693,7 +693,7 @@ function parseTalent(data) {
   let materials = []
   for (const item of data?.list || []) {
     const title = [item.tab_name, item.title].filter(Boolean).join(' · ')
-    const desc = stripHtml(item.desc)
+    const desc = proseOf(item.desc)
     if (title || desc) {
       talents.push({
         name: title,
@@ -733,6 +733,17 @@ function videoFromHtml(value) {
   if (!src) return null
   const name = stripHtml(html).split('\n').find(Boolean) || ''
   return { name, src }
+}
+
+function proseOf(value) {
+  const quotes = []
+  const body = String(value ?? '').replace(/<p>(?:\s|&nbsp;)*([「“][\s\S]*?[」”])(?:\s|&nbsp;)*<\/p>/gi, (_, quote) => {
+    const text = stripHtml(quote).trim()
+    if (text) quotes.push(text)
+    return ''
+  })
+  const text = stripHtml(body)
+  return quotes.length ? `${text}\n\n${quotes.join('\n')}`.trim() : text
 }
 
 function splitConstellations(html) {

@@ -15,8 +15,11 @@ const sources = {
     ['miao-plugin/resources/meta-gs/character/alias.js', 'character'],
     ['miao-plugin/resources/meta-gs/weapon/alias.js', 'weapon'],
     ['miao-plugin/resources/meta-gs/artifact/alias.js', 'artifact'],
+    ['genshin/defSet/role/name.yaml', 'character'],
+    ['genshin/config/role.name.yaml', 'character'],
   ],
   sr: [
+    ['genshin/defSet/role/sr_name.yaml', 'character'],
     ['miao-plugin/resources/meta-sr/character/alias.js', 'character'],
     ['miao-plugin/resources/meta-sr/weapon/alias.js', 'weapon'],
     ['miao-plugin/resources/meta-sr/artifact/alias.js', 'artifact'],
@@ -55,7 +58,10 @@ function parseYaml(text) {
   let name = ''
   let aliases = []
   const flush = () => {
-    if (name) pairs.push([name, aliases])
+    if (!name) return
+    const official = /^\d+$/.test(name) ? (aliases[0] || '') : name
+    const rest = /^\d+$/.test(name) ? aliases.slice(1) : aliases
+    if (official) pairs.push([official, rest])
     name = ''
     aliases = []
   }

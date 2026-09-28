@@ -36,13 +36,13 @@ const THEMES = {
 const LAYOUT = {
   sr: {
     trace: { columns: 1, showIcon: true },
-    eidolon: { columns: 2, showIcon: true },
+    eidolon: { columns: 1, showIcon: true },
     skill: { columns: 1, showIcon: true },
     effect: { columns: 1, showIcon: false },
   },
   zzz: {
     skill: { columns: 1, showIcon: true },
-    cinema: { columns: 2, showIcon: false },
+    cinema: { columns: 1, showIcon: false },
     disk: { columns: 1, showIcon: false },
     story: { columns: 1, showIcon: false },
   },
@@ -62,6 +62,9 @@ const GAME_CSS = `
 .tile p b.word{display:inline;font-weight:800}
 .tile p b{display:inline;color:var(--accent);font-weight:800}
 .tile.plain{grid-column:1/-1}
+.board.cols-1 .tile{display:flex;gap:18px;align-items:flex-start}
+.board.cols-1 .tile>div{flex-shrink:0}
+.board.cols-1 .tile p{margin-top:0}
 .tile.plain p{color:#334155;font-size:26px}
 .tile p b{color:var(--accent)}
 .hero.art{align-items:flex-end}.hero.art .splash{width:280px;height:360px;object-fit:contain;object-position:center bottom;border-radius:20px;background:transparent}

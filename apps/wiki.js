@@ -108,21 +108,36 @@ function talentTotal(groups) {
   return order
 }
 
-export function cardsHtml(cards) {
+export function cardsHtml(cards, layout = '') {
   const items = cards || []
   if (!items.length) return ''
-  const effects = items.every(card => !card.icon && !card.icons?.length)
-  return `<div class="${effects ? 'effects' : 'equips'}">${items.map((card, index) => {
+  const stacked = layout === 'stack'
+  const effects = !stacked && items.every(card => !card.icon && !card.icons?.length)
+  return `<div class="${stacked ? 'skills' : (effects ? 'effects' : 'equips')}">${items.map((card, index) => {
     const group = placeholderGroup(card.group) && placeholderGroup(card.group) !== placeholderGroup(items[index - 1]?.group)
       ? `<div class="group">${escapeHtml(card.group)}</div>`
       : ''
     const icons = (card.icons?.length ? card.icons : [card.icon]).filter(Boolean)
     const icon = icons.length
       ? `<div class="icons">${icons.map(src => `<img src="${escapeHtml(src)}" alt="">`).join('')}</div>`
-      : (effects ? '' : '<span class="placeholder"></span>')
-    const text = card.text ? `<p>${markText(card.text)}</p>` : ''
-    return `${group}<div class="equip">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
+      : (effects || stacked ? '' : '<span class="placeholder"></span>')
+    const text = card.text ? (stacked ? skillText(card.text) : `<p>${markText(card.text)}</p>`) : ''
+    return `${group}<div class="${stacked ? 'skill' : 'equip'}">${icon}<div><b>${escapeHtml(card.name || '')}</b>${text}</div></div>`
   }).join('')}</div>`
+}
+
+function skillText(value) {
+  const parts = String(value).split(/\n{2,}/).map(part => part.trim()).filter(Boolean)
+  const quotes = []
+  const body = []
+  for (const part of parts) {
+    const lines = part.split('\n')
+    if (lines.every(line => /^[「“][^」”]{8,}[」”]$/.test(line.trim()))) quotes.push(...lines)
+    else body.push(part)
+  }
+  const blocks = body.map(part => `<p>${markText(part)}</p>`).join('')
+  const cited = quotes.length ? `<blockquote>${quotes.map(line => `<p>${escapeHtml(line)}</p>`).join('')}</blockquote>` : ''
+  return blocks + cited
 }
 
 const ELEMENT_THEMES = {
@@ -229,6 +244,15 @@ section p b.word{font-weight:800}
 .effects .equip b{font-size:28px}
 .effects .equip p{margin-top:8px;color:#334155;font-size:26px;line-height:1.7}
 .equips{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.skills{display:flex;flex-direction:column;gap:14px}
+.skill{display:flex;gap:18px;align-items:flex-start;padding:22px;border-radius:22px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
+.skill .icons{flex-shrink:0}
+.skill .icons img{width:108px;height:108px;object-fit:contain;border-radius:54px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.skill b{display:block;color:var(--ink);font-size:32px;line-height:1.35}
+.skill p{margin-top:10px;color:#334155;font-size:26px;line-height:1.75}
+.skill p b{display:inline;color:var(--accent);font-size:26px;font-weight:800}
+.skill blockquote{margin-top:14px;padding:12px 16px;border-left:5px solid var(--accent);border-radius:0 14px 14px 0;background:#fff}
+.skill blockquote p{margin-top:6px;color:#64748b;font-size:23px;line-height:1.7}
 .group{grid-column:1/-1;margin-top:4px;color:var(--accent);font-size:26px;font-weight:800}
 .equip{display:flex;align-items:center;gap:16px;min-height:96px;padding:16px;border-radius:18px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .equip .icons{display:flex;gap:8px;flex-shrink:0}
@@ -587,7 +611,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const sections = source.map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards)}${groupsHtml(shown.groups, shown.total)}${shown.empty && !shown.cards?.length && !shown.groups?.length && !shown.total?.length ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}${pictures}</section>`
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${shown.text ? `<p>${markText(shown.text)}</p>` : ''}${cardsHtml(shown.cards, shown.focus === 'talent' || shown.focus === 'constellation' ? 'stack' : '')}${groupsHtml(shown.groups, shown.total)}${shown.empty && !shown.cards?.length && !shown.groups?.length && !shown.total?.length ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}${pictures}</section>`
     }).join('')
     const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
     const links = focus && focus.id !== 'detail' ? '' : this.focusLinks(entry)
