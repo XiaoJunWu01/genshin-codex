@@ -114,7 +114,7 @@ export function shortName(value) {
   return stripHtml(value).replace(/[（(][^）)]*[）)]/g, '').split(/[·:：]/)[0].trim()
 }
 
-function parseItemFilters(value) {
+export function parseItemFilters(value) {
   const ext = parseJson(value, {})
   const bag = Object.values(ext || {}).map(item => item?.filter?.text).find(Boolean)
   const filters = {}

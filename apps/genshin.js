@@ -34,7 +34,7 @@ const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flat
 const lead = '#?g?'
 const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
-import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, markText, profileGrid, resultCss, scalingHtml, themeOf } from './lib/theme.js'
+import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, imagesHtml, markText, profileGrid, resultCss, scalingHtml, talentTotal, themeOf } from './lib/theme.js'
 
 function runGit(args) {
   return new Promise((resolve, reject) => {
@@ -481,7 +481,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       return this.showVideoPage(e, clips, entry.name, 1)
     }
     const part = focus?.id === 'detail' ? null : (focus ? entry.parts?.[focus.id] || [] : null)
-    if (focus && !part.length) {
+    if (focus && focus.id !== 'detail' && !part?.length) {
       await e.reply(`「${entry.name}」没有单独的${focus.name}内容。可以先看 #图鉴 ${entry.name}`)
       return
     }

@@ -84,8 +84,8 @@ export function gamePlugin(spec) {
           await e.reply(channel ? `${game.name}的${channel.name}里没有「${keyword}」。` : `${game.name}没有找到「${keyword}」。`)
           return true
         }
-        if (new Set(matched.map(item => item.name)).size === 1) return this.show(e, matched[0], focus)
         this.sessions.set(this.sessionKey(e), { results: matched, focus: focus?.id || '', time: Date.now() })
+        if (new Set(matched.map(item => item.name)).size === 1) return this.show(e, matched[0], focus)
         await this.replyImage(e, pageHtml({
           title: `「${keyword}」`, subtitle: `${game.name}有多个结果`, body: resultHtml(matched),
           footer: `发送 ${this.spec.letter}1 打开对应条目`, extraCss: resultCss,

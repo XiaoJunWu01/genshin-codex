@@ -42,7 +42,7 @@ export function scalingHtml(scaling) {
   return `<div class="scale"><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
 }
 
-function talentTotal(groups) {
+export function talentTotal(groups) {
   const order = []
   const merged = new Map()
   for (const group of groups || []) {
@@ -162,7 +162,7 @@ function materialHtml(item) {
   return `<span class="mat">${icon}<em>${escapeHtml(item.name)}</em>${amount}</span>`
 }
 
-function imagesHtml(images, motion = false) {
+export function imagesHtml(images, motion = false) {
   const items = images || []
   if (!items.length) return ''
   const shots = items.map(item => {

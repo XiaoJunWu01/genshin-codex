@@ -1,5 +1,5 @@
 import {
-  cardsFromHtml, motionOf, parseJson, peopleFromHtml, remember, section, shortName, stillOf, stripHtml, textOf, registerGame,
+  cardsFromHtml, motionOf, parseItemFilters, parseJson, peopleFromHtml, remember, section, shortName, stillOf, stripHtml, textOf, registerGame,
 } from './games.js'
 
 function formatRpg(game, content) {
