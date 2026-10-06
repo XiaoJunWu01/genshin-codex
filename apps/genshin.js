@@ -26,7 +26,6 @@ import {
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.join(__dirname, '..')
 const sessions = new Map()
-const videoEnabled = new Map()
 const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a, b) => b.length - a.length).join('|')
 const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flatMap(channel => channel.aliases)]
   .sort((a, b) => b.length - a.length)
@@ -83,7 +82,6 @@ export default class WikiPlugin extends plugin {
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
-        { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo', priority: 40 },
         { reg: `^${lead}(?:影音|影音回廊|pv|PV|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
@@ -138,7 +136,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async showHelp(e) {
-    const on = this.videoOn(e)
     const version = pluginVersion()
     const bg = getBackgroundImageUrl()
     const groups = [
@@ -208,8 +205,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['z壁纸', '节日和版本壁纸', '纸'],
       ]],
       ...(e.isMaster ? [['主人设置', [
-        ['#图鉴视频开', `角色视频${on ? '已开启' : '已关闭'}`, '视'],
-        ['#图鉴视频关', '关闭视频解析', '关'],
         ['#图鉴更新', '拉取插件更新', '新'],
       ]]] : []),
     ]
@@ -482,10 +477,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (focus?.id === 'portrait') return this.sendPortraits(e, entry)
     if (focus?.id === 'showcase') return this.sendMotions(e, entry)
     if (focus?.id === 'video' || (!focus && entry.videos?.length && !entry.sections?.length)) {
-      if (!this.videoOn(e)) {
-        await e.reply('角色视频解析默认关闭。发送 #图鉴视频开 后，再查这一条。')
-        return
-      }
       const clips = (entry.videos || []).map(clip => ({ name: clip.name || entry.name, src: clip.src, cover: '', summary: '', group: '角色视频' }))
       if (!clips.length) {
         await e.reply(`「${entry.name}」没有可播放的视频。`)
@@ -509,22 +500,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       extraCss: entryCss,
       theme: themeOf(entry),
     }))
-  }
-
-  videoOn(e) {
-    return videoEnabled.get(this.sessionKey(e)) === true
-  }
-
-  async toggleVideo(e) {
-    if (!e.isMaster) return false
-    const matched = String(e.msg || '').match(new RegExp(`^${lead}图鉴视频(?:\\s*(开|关))?$`))
-    const key = this.sessionKey(e)
-    const next = matched?.[1] ? matched[1] === '开' : !this.videoOn(e)
-    videoEnabled.set(key, next)
-    await e.reply(next
-      ? '已开启本插件的角色视频解析。查询角色视频词条时会直接发视频，其他链接仍不处理。'
-      : '已关闭角色视频解析。')
-    return true
   }
 
   async gallery(e) {
