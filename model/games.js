@@ -382,12 +382,9 @@ export async function mediaGroups(key) {
   if (spec.kind === 'video') {
     const lists = await Promise.all(spec.groups.map(group => listMedia(game, group)))
     items = lists.flat()
-  } else if (spec.videos) {
-    const lists = await Promise.all(spec.videos.map(group => listMedia(game, group)))
-    items = lists.flat()
   } else {
     const page = await mediaPage(key, spec.id)
-    items = imageGroups(page).map(group => ({ id: group.name, name: group.name, count: group.images.length }))
+    items = imageGroups(page).map(group => ({ id: group.name, name: group.name, count: group.images.length, images: group.images.length }))
   }
   cache.lists.set(`${key}:media`, { time: Date.now(), items })
   return items
@@ -400,9 +397,22 @@ export async function mediaImages(key, name) {
   return found?.images || []
 }
 
+async function videoItems(key) {
+  const spec = MEDIA[key]
+  const game = gameOf(key)
+  const groups = spec?.groups || spec?.videos || []
+  if (!game || !groups.length) return []
+  const cached = cache.lists.get(`${key}:videos`)
+  if (cached && Date.now() - cached.time < LIST_TTL) return cached.items
+  const lists = await Promise.all(groups.map(group => listMedia(game, group)))
+  const items = lists.flat()
+  cache.lists.set(`${key}:videos`, { time: Date.now(), items })
+  return items
+}
+
 export async function mediaVideos(key, keyword = '') {
   const spec = MEDIA[key]
-  const items = await mediaGroups(key)
+  const items = await videoItems(key)
   const text = String(keyword || '').trim()
   const groups = spec.groups || spec.videos || []
   const group = groups.find(item => item.name === text)
@@ -411,7 +421,7 @@ export async function mediaVideos(key, keyword = '') {
 }
 
 export async function mediaClip(key, id) {
-  const item = (await mediaGroups(key)).find(entry => entry.id === String(id))
+  const item = (await videoItems(key)).find(entry => entry.id === String(id))
   if (!item) return null
   const post = String(item.bbs || '').match(/article\/(\d+)/)?.[1] || ''
   if (post) {
