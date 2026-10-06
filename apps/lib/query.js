@@ -16,14 +16,14 @@ export function gamePlugin(spec) {
       super({
         name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
-          { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 1 },
-          { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 1 },
-          { reg: `^#?${spec.letter}(?![a-z#])(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
-          { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 1 },
-          { reg: `^(?:#|g)?(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 1 },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+          { reg: `^#?${spec.letter}(?![a-z#])(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
+          { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
+          { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
+          { reg: `^(?:#|g)?(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
         ],
       })
       this.spec = spec
