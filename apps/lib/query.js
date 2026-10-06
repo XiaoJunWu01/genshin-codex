@@ -84,7 +84,9 @@ export function gamePlugin(spec) {
         const exact = results.filter(item => item.score >= 100)
         const matched = channel || focus ? results : (exact.length ? exact : results)
         if (!matched.length) {
-          await e.reply(channel ? `${game.name}的${channel.name}里没有「${keyword}」。` : `${game.name}没有找到「${keyword}」。`)
+          await e.reply(channel
+            ? `${game.name}的${channel.name}里暂无「${keyword}」的数据，敬请期待。`
+            : `暂无「${keyword}」的角色数据，敬请期待。`)
           return true
         }
         const preferred = !channel && !focus ? exact.filter(item => ENTRY_CHANNEL.test(item.channelName || '')) : []

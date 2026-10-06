@@ -665,8 +665,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const keyword = String(e.msg || '').replace(/^#?g\s*/, '').trim()
     if (!keyword || keyword.length > 16 || /帮助|视频|图鉴|目录|列表|更新/.test(keyword)) return false
     if (findWikiFocus(keyword)) return false
-    const found = await this.openExact(e, keyword)
-    return found ? true : false
+    try {
+      const found = await this.openExact(e, keyword)
+      if (!found) await e.reply(`暂无「${keyword}」的角色数据，敬请期待。`)
+    } catch (err) {
+      logger.error('[观测枢图鉴]', err)
+      await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+    }
+    return true
   }
 
   async queryBare(e) {
