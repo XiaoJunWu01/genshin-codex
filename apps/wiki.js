@@ -216,11 +216,12 @@ function imagesHtml(images, motion = false) {
   return `<div class="${motion ? 'motions' : 'gallery'}">${shots}</div>`
 }
 
-export function groupsHtml(groups, total = []) {
+export function groupsHtml(groups, total = [], statsHtml = null) {
   const rows = (groups || []).map(group => {
     const items = (group.materials || []).map(materialHtml).join('')
     const note = group.note ? `<small>${markText(group.note)}</small>` : ''
-    return `<div class="level"><b>${escapeHtml(group.name)}</b><div>${items}</div>${note}</div>`
+    const stats = statsHtml ? statsHtml(group.stats) : ''
+    return `<div class="level"><b>${escapeHtml(group.name)}</b><div>${items}</div>${note}${stats}</div>`
   }).join('')
   const summary = total?.length
     ? `<div class="level total"><b>满级合计</b><div>${total.map(materialHtml).join('')}</div></div>`
@@ -318,7 +319,7 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
         { reg: `^${lead}图鉴视频(?:\\s*(开|关))?$`, fnc: 'toggleVideo', priority: 40 },
-        { reg: `^${lead}(?:影音|影音回廊|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^${lead}(?:影音|影音回廊|pv|PV|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
         { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
@@ -327,6 +328,7 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$`, fnc: 'queryMedia', priority: 70 },
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 75 },
+        { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 76 },
         { reg: `^#(?!${reserved})([^\\s#]{2,16})$`, fnc: 'queryBare', priority: 78 },
       ],
     })
@@ -389,7 +391,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#g突破 胡桃', '突破材料和满级合计', '突'],
         ['#g故事 胡桃', '角色故事和配音', '故'],
         ['#g资料 胡桃', '生日、称号和所属', '档'],
-        ['#图鉴2', '打开上一次结果的第 2 条', '页'],
+        ['g2', '打开上一次结果的第 2 条', '页'],
       ]],
       ['养成与世界', [
         ['#g武器 狼的末路', '武器效果、突破材料和推荐角色', '武'],
@@ -698,7 +700,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return {
       totalPage,
       body: `<div class="results">${rows}</div>`,
-      footer: `发送 #图鉴序号 查看，例如 #图鉴${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`,
+      footer: `发送 g序号 查看，例如 g${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`,
     }
   }
 
@@ -761,7 +763,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const words = raw.split(/\s+/).filter(Boolean)
     const page = /^\d+$/.test(words.at(-1) || '') && words.length > 1 ? parseInt(words.pop(), 10) : 1
     const kind = /^(?:过场动画|其他视频|角色视频)/.test(words[0] || '') ? words.shift() : ''
-    const keyword = words.join('').replace(/^(?:影音回廊|影音)/, '')
+    const keyword = words.join('').replace(/^(?:影音回廊|影音|pv|PV)/, '')
     try {
       if (!keyword && !kind) {
         const items = await mediaGroups('ys')
@@ -786,7 +788,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const size = 4
     const totalPage = Math.max(1, Math.ceil(items.length / size))
     const current = Math.min(Math.max(page, 1), totalPage)
-    sessions.set(this.sessionKey(e), { videos: items, keyword, time: Date.now() })
+    sessions.set(this.sessionKey(e), { kind: 'video', videos: items, keyword, time: Date.now() })
     const start = (current - 1) * size
     const rows = items.slice(start, start + size).map((item, index) => {
       const no = start + index + 1
@@ -906,6 +908,12 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return found ? true : false
   }
 
+  async queryIndex(e) {
+    const index = parseInt(String(e.msg || '').replace(/^#?g\s*/, ''), 10)
+    e.msg = `#图鉴 ${index}`
+    return this.query(e)
+  }
+
   async openExact(e, keyword, focus = null) {
     const results = await searchWiki(keyword, { limit: 30 })
     const exact = results.filter(item => item.score >= 100)
@@ -921,7 +929,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: `「${keyword}」`,
       subtitle: '有多个同名词条，发送序号打开',
       body: view.body,
-      footer: '例如 #图鉴1',
+      footer: '例如 g1',
       extraCss: resultCss,
     }), `${keyword}有多个同名词条`)
     return true
@@ -950,7 +958,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         title: `「${keyword}」`,
         subtitle: `选一个再看${focus.name}`,
         body: view.body,
-        footer: `发送 #图鉴序号 查看${focus.name}，例如 #图鉴1`,
+        footer: `发送 g序号 查看${focus.name}，例如 g1`,
         extraCss: resultCss,
       }))
     } catch (err) {
@@ -977,7 +985,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       if (/^\d+$/.test(input)) {
         const cached = sessions.get(key)
         const index = parseInt(input, 10) - 1
-        if (cached?.videos && Date.now() - cached.time < 10 * 60 * 1000) {
+        if (cached?.kind === 'video' && cached.videos && Date.now() - cached.time < 10 * 60 * 1000) {
           const item = cached.videos[index]
           if (!item) {
             await e.reply(`没有第 ${index + 1} 条。当前共 ${cached.videos.length} 条。`)
@@ -1013,7 +1021,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
       const chosen = parsed.page === 1 ? this.uniqueHit(matched) : null
       if (chosen) {
-        const extra = matched.length > 1 ? `还有 ${matched.length - 1} 个相关结果，发送 #图鉴2 查看` : ''
+        const extra = matched.length > 1 ? `还有 ${matched.length - 1} 个相关结果，发送 g2 查看` : ''
         await this.showEntry(e, chosen, extra)
         return true
       }

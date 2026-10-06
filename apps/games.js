@@ -24,6 +24,12 @@ import {
 } from '../model/games.js'
 import { entryCss, groupsHtml, markText, resultCss, themeOf } from './wiki.js'
 
+function statsHtml(stats) {
+  if (!stats?.rows?.length) return ''
+  return `<div class="scale rise"><table><thead><tr><th></th>${stats.levels.map(level => `<th>${escapeHtml(level)}</th>`).join('')}</tr></thead><tbody>${stats.rows.map(row => `<tr><th>${escapeHtml(row.name)}</th>${stats.levels.map((_, index) => `<td>${escapeHtml(row.values?.[index] || '')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`
+
+}
+
 function profileHtml(lines) {
   const rows = (lines || []).flatMap(line => {
     const index = String(line).indexOf('：')
@@ -101,6 +107,7 @@ const GAME_CSS = `
 .scale tbody th{width:18%;color:var(--ink);text-align:left;padding-left:12px;font-size:21px}
 .scale td{color:var(--accent)}
 .scale tr:last-child th,.scale tr:last-child td{border-bottom:0}
+.scale.rise{margin-top:10px}.scale.rise tbody th{width:24%}.voices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.voices span{display:flex;align-items:baseline;gap:12px;padding:12px 16px;border-radius:16px;background:#fff;border:1px solid rgba(15,23,42,.06);border-left:5px solid var(--accent)}.voices b{flex:0 0 1.4em;color:var(--accent);font-size:24px}.voices em{color:var(--ink);font-style:normal;font-size:25px;font-weight:700}
 .hero.art{align-items:flex-end}.hero.art .splash{width:280px;height:360px;object-fit:contain;object-position:center bottom;border-radius:20px;background:transparent}
 `
 
@@ -137,10 +144,12 @@ export default class GameWikiPlugin extends plugin {
       rule: [
         { reg: `^#?[${letters}](?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^#?[${letters}](?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
-        { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^#?[${letters}](?![a-z#])(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^#?[${letters}](?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^(?:#|g)?(?:${words})(?:\\s*帮助)?$`, fnc: 'help' },
         { reg: `^(?:#|g)?(?:${words})\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
-        { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸|影音|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^(?:#|g)?(?:${words})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
+        { reg: `^(?:#|g)?(?:${words})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
       ],
     })
   }
@@ -213,9 +222,10 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       const cards = boardHtml(shown.cards, layout)
       const profile = shown.focus === 'profile' ? profileHtml(shown.lines) : ''
       const voices = shown.focus === 'voice'
-        ? `<div class="voices">${(shown.lines || []).map(line => `<span>${escapeHtml(line)}</span>`).join('')}</div>` : ''
+        ? `<div class="voices">${(shown.lines || []).map(line => { const cut = String(line).indexOf('：'); const label = cut > 0 ? line.slice(0, cut) : ''; const actor = cut > 0 ? line.slice(cut + 1) : line; return `<span>${label ? `<b>${escapeHtml(label)}</b>` : ''}<em>${escapeHtml(actor)}</em></span>` }).join('')}</div>` : ''
       const prose = profile || voices ? '' : (shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : '')
-      return `<section><h3>${escapeHtml(shown.title)}</h3>${prose}${profile}${voices}${groupsHtml(shown.groups, shown.total)}${cards}${shown.empty && !cards && !voices ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}</section>`
+      const levels = groupsHtml(shown.groups, shown.total, statsHtml)
+      return `<section><h3>${escapeHtml(shown.title)}</h3>${prose}${profile}${voices}${levels}${cards}${shown.empty && !cards && !voices ? `<p class="empty">${escapeHtml(shown.empty)}</p>` : ''}</section>`
     }).join('')
     const links = !focus || focus.id === 'detail'
       ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => focusOf(key, id)?.name).filter(Boolean)
@@ -258,7 +268,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       const focus = words.length > 1 ? focusOf(command.key, lead) : null
       const keyword = (channel || focus) ? words.slice(1).join('') : words.join('')
       if (!keyword) return this.catalog(e, command.key, channel)
-      if (page && /影音|视频/.test(rest)) return this.openVideoPage(e, command.key, keyword, page)
+      if (page && /影音|视频|pv|PV/.test(rest)) return this.openVideoPage(e, command.key, keyword, page)
       const results = await searchGame(command.key, keyword, { channelId: channel?.id || 0, limit: 8 })
       const matched = channel || focus ? results : results.filter(item => item.score >= 100)
       if (!matched.length) {
@@ -267,8 +277,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           : `${game.name}没有找到「${keyword}」。`)
         return true
       }
-      const exact = matched.filter(item => item.score >= 100)
-      const chosen = matched.length === 1 || exact.length === 1 ? (exact[0] || matched[0]) : null
+      const names = new Set(matched.map(item => item.name))
+      const chosen = names.size === 1 ? matched[0] : null
       if (chosen) return this.show(e, command.key, chosen, focus)
       sessions.set(this.sessionKey(e, command.key), { results: matched, focus: focus?.id || '', time: Date.now() })
       const gameInfo = GAMES.find(item => item.key === command.key)
@@ -276,7 +286,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         title: `「${keyword}」`,
         subtitle: `${game.name}有多个结果`,
         body: this.resultHtml(matched),
-        footer: `发送 ${gameInfo.letter}1 打开对应条目`,
+        footer: `发送 ${mark(game)}1 打开对应条目`,
         extraCss: resultCss,
       }), matched.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
     } catch (err) {
@@ -307,7 +317,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async openIndex(e, key, index) {
     const game = gameOf(key)
     const cached = sessions.get(this.sessionKey(e, key))
-    if (cached?.videos && Date.now() - cached.time < 10 * 60 * 1000) {
+    if (cached?.kind === 'video' && cached.videos && Date.now() - cached.time < 10 * 60 * 1000) {
       const item = cached.videos[index - 1]
       if (!item) {
         await e.reply(`没有第 ${index} 条。当前共 ${cached.videos.length} 条。`)
@@ -325,7 +335,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async openVideoPage(e, key, keyword, page) {
     const cached = sessions.get(this.sessionKey(e, key))
-    if (cached?.videos && cached.keyword === keyword && Date.now() - cached.time < 10 * 60 * 1000) {
+    if (cached?.kind === 'video' && cached.videos && cached.keyword === keyword && Date.now() - cached.time < 10 * 60 * 1000) {
       return this.showVideoPage(e, key, cached.videos, keyword, page)
     }
     const result = await mediaVideos(key, keyword)
@@ -381,12 +391,13 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async sendPortraits(e, entry) {
-    const pictures = entry.portraits?.length ? entry.portraits : (entry.theme?.portrait ? [{ src: entry.theme.portrait, name: entry.name }] : [])
-    if (!pictures.length) {
+    const pictures = (entry.portraits || []).filter(item => item.art)
+    const shown = pictures.length ? pictures : (entry.portraits?.length ? entry.portraits : (entry.theme?.portrait ? [{ src: entry.theme.portrait, name: entry.name }] : []))
+    if (!shown.length) {
       await e.reply(`「${entry.name}」还没有立绘。`)
       return true
     }
-    await e.reply(pictures.flatMap(item => [item.name && pictures.length > 1 ? item.name : '', segment.image(item.src)].filter(Boolean)))
+    await e.reply(shown.flatMap(item => [item.name && shown.length > 1 ? item.name : '', segment.image(item.src)].filter(Boolean)))
     return true
   }
 
@@ -405,7 +416,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const command = commandOf(e.msg)
     const game = gameOf(command.key)
     const spec = mediaOf(command.key)
-    const keyword = command.rest.replace(/^(?:表情包|壁纸|影音|角色视频|其他视频)/, '').trim()
+    const keyword = command.rest.replace(/^(?:表情包|壁纸|影音|pv|PV|角色视频|其他视频)/, '').trim()
     if (spec?.kind === 'wallpaper' && /表情包/.test(command.rest)) {
       await e.reply(`${game.name}没有表情包收录，发送 ${mark(game)}壁纸 查看壁纸。`)
       return true
@@ -414,7 +425,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await e.reply(`${game.name}的收录是表情包，发送 ${mark(game)}表情包。`)
       return true
     }
-    if (spec?.videos && /^(?:影音|角色视频|其他视频)/.test(command.rest)) return this.showMedia(e, command.key, keyword)
+    if (spec?.videos && /^(?:影音|pv|PV|角色视频|其他视频)/.test(command.rest)) return this.showMedia(e, command.key, keyword)
     if (spec?.kind === 'video') return this.showMedia(e, command.key, keyword)
     try {
       const groups = await mediaGroups(command.key)
@@ -464,7 +475,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const size = 4
     const totalPage = Math.max(1, Math.ceil(items.length / size))
     const current = Math.min(Math.max(page, 1), totalPage)
-    sessions.set(this.sessionKey(e, key), { videos: items, keyword, page: current, time: Date.now() })
+    sessions.set(this.sessionKey(e, key), { kind: 'video', videos: items, keyword, page: current, time: Date.now() })
     const game = gameOf(key)
     const start = (current - 1) * size
     const cards = items.slice(start, start + size).map((item, index) => ({

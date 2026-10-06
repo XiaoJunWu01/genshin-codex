@@ -131,6 +131,7 @@ export function stripHtml(value) {
   return String(value ?? '')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(p|div|li|tr|h\d)>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '\n')
     .replace(/<li[^>]*>/gi, '\n· ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
@@ -209,6 +210,13 @@ function scoreItem(item, keyword) {
   return Math.max(rank(item.name), rank(item.fullName), rank(item.alias), mapped ? 100 : 0)
 }
 
+function rankChannel(item) {
+  const name = item.channelName || ''
+  if (/角色|代理人|光锥|音擎|驱动盘|遗器|敌人|材料/.test(name)) return 0
+  if (/视频|攻略|地图/.test(name)) return 2
+  return 1
+}
+
 async function searchRemote(game, keyword) {
   const cacheKey = `${game.key}:${normalizeName(keyword)}`
   const cached = cache.searches.get(cacheKey)
@@ -234,8 +242,8 @@ export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}
   const add = item => {
     const score = scoreItem(item, text)
     if (score < 95) return
-    const prev = collected.get(item.id)
-    if (!prev || score > prev.score) collected.set(item.id, { ...item, score })
+    const prev = collected.get(item.name)
+    if (!prev || score > prev.score || (score === prev.score && rankChannel(item) < rankChannel(prev))) collected.set(item.name, { ...item, score })
   }
   if (channelId) {
     const channel = (await channelsOf(key)).find(item => item.id === channelId)
@@ -330,16 +338,21 @@ function formatCharacter(game, content) {
         const cards = (data.points || []).flatMap(point => {
           const group = textOf(point.tag || point.name)
           const scaling = traceScaling(point.tableData)
-          return (point.subList || []).map(item => ({
-            name: textOf(item.subTitle) || textOf(point.name).split('/')[0],
-            text: stripHtml(item.subDesc || item.desc),
-            icon: stillOf(item.image),
+          const subs = point.subList || []
+          if (!subs.length) {
+            const name = textOf(point.name).split('/')[0]
+            return name && scaling ? [{ name, text: '', group, scaling }] : []
+          }
+          return subs.map((item, index) => ({
+            name: textOf(item.subTitle) || textOf(point.name).split('/')[0] || group,
+            text: [stripHtml(item.subDesc || item.desc), ...(item.subTag || []).map(textOf)].filter(Boolean).join('\n'),
+            icon: index === 0 ? stillOf(item.image) : '',
             group,
-            scaling,
+            scaling: index === 0 ? scaling : null,
           }))
-        }).filter(item => item.name && item.text)
-        const skills = cards.filter(card => /普攻|战技|终结技|天赋|秘技|额外能力/.test(card.group))
-        const rest = cards.filter(card => !skills.includes(card))
+        }).filter(item => item.name && (item.text || item.scaling))
+        const skills = cards.filter(card => /普攻|战技|终结技|天赋|秘技|额外能力|欢愉技|忆灵/.test(card.group))
+        const rest = cards.filter(card => !skills.includes(card) && card.scaling)
         remember(sections, parts, section(module.name || '角色行迹', [], [...skills, ...rest], 'trace'))
       } else if (component.componentId === 'character_rich') {
         const focus = /星魂/.test(module.name) ? 'eidolon' : /推荐/.test(module.name) ? 'recommend' : /故事|语音|关系/.test(module.name) ? 'story' : ''
@@ -394,7 +407,7 @@ function formatTabs(game, content) {
       const key = block.tmplKey || ''
       if (key === 'light') {
         facts.push(['命途', textOf(data.career)], ['稀有度', textOf(data.rate)])
-        if (data.image) portraits.push({ name: '光锥', src: data.image })
+        if (data.image && !portraits.some(item => item.art)) portraits.push({ name: '光锥', src: data.image, art: true })
         remember(sections, parts, section('光锥效果', [data.skill], [], 'effect'))
         remember(sections, parts, section('光锥故事', [data.desc], [], 'story'))
         remember(sections, parts, section('光锥晋阶', [], [], 'ascension', coneGroups(data.attr)))
@@ -484,6 +497,24 @@ function growthScaling(growth) {
   return levels.length && rows.length ? { levels, rows } : null
 }
 
+function promotionGroups(growth) {
+  const groups = []
+  for (const level of growth || []) {
+    const label = textOf(level.name)
+    if (!/总计|突破|晋升|晋阶/.test(label)) continue
+    const materials = (level.children || []).flatMap(child => (child.row || []).flat().flatMap(entriesFromHtml))
+    const seen = new Set()
+    const unique = materials.filter(item => {
+      const key = item.name + item.amount
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
+    if (unique.length) groups.push({ name: /总计/.test(label) ? '满级合计' : label, materials: unique })
+  }
+  return groups
+}
+
 function voiceLines(html) {
   const labels = { 中: '中', 汉: '中', 日: '日', 英: '英', 韩: '韩' }
   const found = []
@@ -533,11 +564,14 @@ function formatWiki(game, page) {
         remember(sections, parts, section(title || '基础资料', facts, [], 'profile'))
       } else if (id === 'rich_row_base_info' && /角色/.test(JSON.stringify(data.rich_text || ''))) {
         const intro = stripHtml(data.rich_text)
-          .replace(/【角色TAG】\s*[：:]/g, '定位：')
-          .replace(/【角色详情】\s*[：:]/g, '\n简介：')
+          .replace(/【\s*角色\s*TAG\s*】\s*[：:]?\s*/g, '定位：')
+          .replace(/【\s*角色详情\s*】\s*[：:]?\s*/g, '\n简介：')
           .replace(/[ \t]+\n/g, '\n')
-        profile.push(...intro.split('\n').filter(Boolean))
-        remember(sections, parts, section('角色简介', [intro], [], 'profile'))
+        const lines = intro.split('\n').map(line => line.trim()).filter(Boolean)
+        profile.push(...lines)
+        const brief = lines.find(line => line.startsWith('简介：'))
+        const text = brief ? brief.replace(/^简介：/, '') : lines.filter(line => !line.includes('：')).join('\n')
+        if (text) remember(sections, parts, section('角色简介', [text], [], 'profile'))
       } else if (id === 'material_base_info') {
         const facts = [['稀有度', data.grade], ['类型', data.type]]
           .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
@@ -553,7 +587,9 @@ function formatWiki(game, page) {
           name: [textOf(item.tab_name), textOf(item.title)].filter(Boolean).join(' · ') || textOf(item.title),
           text: stripHtml(item.desc), icon: stillOf(item.icon),
           scaling: growthScaling(item.growth),
-        })).filter(item => item.name && item.text)
+        })).filter(item => item.name && item.text && !/职级晋升|滑动滑块|词条释义/.test(item.text))
+        const promotions = (data.list || []).flatMap(item => item.children || []).flatMap(item => promotionGroups(item.growth))
+        if (promotions.length) remember(sections, parts, section(title || '突破', [], [], 'ascension', promotions))
         for (const item of (data.list || []).flatMap(group => group.children || [])) {
           if (motionOf(item.animated_icon)) motions.push({ name: textOf(item.title) || '技能', src: item.animated_icon })
         }
@@ -575,9 +611,13 @@ function formatWiki(game, page) {
             text: stripHtml((table.row?.[0] || [])[index] || ''),
           }))).filter(item => item.name && item.text)
           remember(sections, parts, section('套装效果', [], cards, 'set'))
-        } else if (/推荐/.test(headers)) {
+        } else if (/推荐角色/.test(headers)) {
           const cards = tableCards(data).map(card => ({ ...card, group: '' })).filter(card => card.name && card.name !== '默认标题')
           remember(sections, parts, section('推荐角色', [], cards, 'recommend', [], [], [], cards.length ? '' : '暂无推荐角色'))
+        } else if (/推荐(?:音擎|驱动盘|配队)/.test(headers)) {
+          const cards = tableCards(data).map(card => ({ ...card, group: '' })).filter(card => card.name && card.name !== '默认标题')
+          const label = headers.match(/推荐(?:音擎|驱动盘|配队)/)?.[0] || '推荐'
+          remember(sections, parts, section(named(title, label), [], cards, 'recommend'))
         } else if (/音擎效果|驱动盘效果/.test(headers)) {
           const text = (data.tables || []).flatMap(table => (table.row || []).flatMap(row => (Array.isArray(row) ? row : Object.values(row)).map(stripHtml))).filter(item => item && item !== '暂无')
           remember(sections, parts, section('效果', text, [], 'effect'))
@@ -627,7 +667,7 @@ function formatWiki(game, page) {
   const engine = sections.some(item => item.focus === 'effect') && !agent && !disk
   const voices = sections.filter(item => item.focus === 'voice')
   const overview = agent
-    ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id))
+    ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'profile' || item.title === '基础资料' || item.title === '角色简介')))
     : ['effect', 'set', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'set' || item.title === '套装效果')))
   if (agent) overview.push(...voices)
   if (engine && !overview.some(item => item.focus === 'recommend')) {
@@ -657,11 +697,38 @@ function ascensionGroups(list) {
       icon: item.icon || item.img || '',
       amount: item.amount || item.num || '',
     })).filter(item => item.name),
-    note: (level.attr || []).map(item => {
-      const value = Array.isArray(item.value) ? item.value.map(textOf).filter(Boolean).join('、') : textOf(item.value)
-      return [textOf(item.key), value].filter(Boolean).join(' ')
-    }).filter(Boolean).join('；'),
+    note: attrNote(level.attr),
+    stats: attrStats(level.attr),
   })).filter(group => group.name && (group.materials.length || group.note))
+}
+
+function attrPairs(attr) {
+  return (attr || []).map(item => {
+    const value = Array.isArray(item.value) ? item.value.map(textOf).filter(Boolean).join('、') : textOf(item.value)
+    return [textOf(item.key), value]
+  }).filter(([key, value]) => key && value)
+
+}
+
+function attrNote(attr) {
+  return attrPairs(attr).filter(([key]) => !/晋阶前|晋阶后/.test(key)).map(([key, value]) => key + ' ' + value).join('；')
+}
+
+function attrStats(attr) {
+  const pairs = attrPairs(attr).filter(([key]) => /晋阶前|晋阶后/.test(key))
+  if (!pairs.length) return null
+  const rows = []
+  for (const [key, value] of pairs) {
+    const name = key.replace(/晋阶前|晋阶后/g, '')
+    let row = rows.find(item => item.name === name)
+    if (!row) {
+      row = { name, values: ['', ''] }
+      rows.push(row)
+    }
+    row.values[/晋阶后/.test(key) ? 1 : 0] = value
+  }
+  return { levels: ['晋阶前', '晋阶后'], rows }
+
 }
 
 function coneGroups(list) {
@@ -677,7 +744,7 @@ function collectGallery(data, portraits, videos) {
       const name = [textOf(item.name), textOf(item.append)].filter(Boolean).join(' · ')
       const page = articleOf(item.url)
       if (/视频/.test(tab.tabName || '') && page) videos.push({ name: name || '视频', page, cover: item.image || '' })
-      else if (item.image && !page) portraits.push({ name: name || textOf(tab.tabName) || '图片', src: item.image })
+      else if (item.image && !page && !/光锥/.test(name)) portraits.push({ name: name || textOf(tab.tabName) || '图片', src: item.image })
     }
   }
 }
@@ -710,11 +777,20 @@ function rewardGroups(data) {
 
 function entriesFromHtml(html) {
   const source = String(html || '').replace(/\\"/g, '"')
-  return [...source.matchAll(/data-entry-name=\"([^\"]+)\"[^>]*data-entry-amount=\"([^\"]*)\"[^>]*data-entry-img=\"([^\"]+)\"|data-entry-img=\"([^\"]+)\"[^>]*data-entry-name=\"([^\"]+)\"[^>]*data-entry-amount=\"([^\"]*)\"/g)].map(item => ({
-    name: textOf(item[1] || item[5]),
-    amount: item[2] || item[6] || '',
-    icon: (item[3] || item[4] || '').split('?')[0],
-  })).filter(item => item.name)
+  return [...source.matchAll(/data-entry-(?:name|amount|desc|img)="([^"]*)"/g)]
+    .reduce((items, match, index, all) => {
+      if (!match[0].startsWith('data-entry-name=')) return items
+      const nearby = all.slice(Math.max(0, index - 6), index + 7).map(item => item[0])
+      const amount = nearby.find(item => item.startsWith('data-entry-amount=')) || nearby.find(item => item.startsWith('data-entry-desc='))
+      const icon = nearby.find(item => item.startsWith('data-entry-img='))
+      items.push({
+        name: textOf(match[1]),
+        amount: amount ? amount.replace(/^data-entry-(?:amount|desc)="/, '').replace(/"$/, '') : '',
+        icon: icon ? icon.replace(/^data-entry-img="/, '').replace(/"$/, '').split('?')[0] : '',
+      })
+      return items
+    }, [])
+    .filter(item => item.name && !/暂无/.test(item.name))
 }
 
 const MEDIA = {
