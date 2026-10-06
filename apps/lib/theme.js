@@ -19,7 +19,7 @@ function placeholderGroup(value) {
   return value && !/默认标题|暂无/.test(value) ? value : ''
 }
 
-function profileGrid(text) {
+export function profileGrid(text) {
   const rows = String(text || '').split('\n').map(line => {
     const index = line.indexOf('：')
     if (index <= 0) return ''

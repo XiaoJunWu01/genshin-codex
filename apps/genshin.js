@@ -34,7 +34,7 @@ const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flat
 const lead = '#?g?'
 const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
-import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, markText, resultCss, scalingHtml, themeOf } from './lib/theme.js'
+import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, markText, profileGrid, resultCss, scalingHtml, themeOf } from './lib/theme.js'
 
 function runGit(args) {
   return new Promise((resolve, reject) => {
