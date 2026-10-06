@@ -40,6 +40,9 @@ export function scalingHtml(scaling) {
   const levels = scaling?.levels || []
   const rows = (scaling?.rows || []).filter(row => (row.values || []).some(Boolean))
   if (levels.length < 2 || !rows.length) return ''
+  if (levels.length > 6) {
+    return `<div class="meters">${rows.map(row => `<div><em>${escapeHtml(row.name)}</em><b>${levels.map((level, index) => `<span>${escapeHtml(level)} ${escapeHtml(row.values?.[index] || '')}</span>`).join('')}</b></div>`).join('')}</div>`
+  }
   const head = levels.map(level => `<th>${escapeHtml(level)}</th>`).join('')
   const body = rows.map(row => `<tr><th>${escapeHtml(row.name)}</th>${levels.map((_, index) => `<td>${escapeHtml(row.values?.[index] || '')}</td>`).join('')}</tr>`).join('')
   return `<div class="scale"><table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table></div>`
@@ -59,9 +62,9 @@ export const GAME_CSS = `
 .tile p b.word{display:inline;font-weight:800}
 .tile p b{display:inline;color:var(--accent);font-weight:800}
 .tile.plain{grid-column:1/-1}
-.board.cols-1 .tile{display:flex;gap:18px;align-items:flex-start}
-.board.cols-1 .tile>div{flex-shrink:0}
-.board.cols-1 .tile p{margin-top:0}
+.board.cols-1 .tile{display:block}
+.board.cols-1 .tile>div{display:flex;align-items:center;gap:16px}
+.board.cols-1 .tile p{margin-top:12px}
 .tile.plain p{color:#334155;font-size:26px}
 .tile p b{color:var(--accent)}
 .profile{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;margin-top:4px}
@@ -71,10 +74,15 @@ export const GAME_CSS = `
 .voices{display:flex;flex-wrap:wrap;gap:10px}
 .voices span{padding:10px 18px;border-radius:999px;background:var(--soft);color:var(--ink);font-size:24px;font-weight:700}
 .scale{margin-top:14px;overflow:hidden;border-radius:14px;background:#fff;border:1px solid rgba(15,23,42,.06)}
-.scale table{width:100%;border-collapse:collapse;table-layout:fixed}
-.scale th,.scale td{padding:9px 4px;border-bottom:1px solid rgba(15,23,42,.06);text-align:center;font-size:20px;font-weight:700;line-height:1.35;word-break:break-all}
+.scale table{width:100%;border-collapse:collapse;table-layout:auto}
+.scale th,.scale td{padding:9px 8px;border-bottom:1px solid rgba(15,23,42,.06);text-align:center;font-size:20px;font-weight:700;line-height:1.35;white-space:nowrap}
+.meters{display:flex;flex-direction:column;gap:8px;margin-top:14px}
+.meters div{padding:12px 14px;border-radius:14px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.meters em{display:block;color:var(--ink);font-style:normal;font-size:23px;font-weight:800}
+.meters b{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;color:var(--accent);font-size:21px;font-weight:700}
+.meters span{white-space:nowrap}
 .scale thead th{color:#64748b;background:var(--soft);font-size:18px}
-.scale tbody th{width:18%;color:var(--ink);text-align:left;padding-left:12px;font-size:21px}
+.scale tbody th{color:var(--ink);text-align:left;padding-left:12px;font-size:21px;white-space:normal}
 .scale td{color:var(--accent)}
 .scale tr:last-child th,.scale tr:last-child td{border-bottom:0}
 .scale.rise{margin-top:10px}.scale.rise tbody th{width:24%}.voices{display:grid;grid-template-columns:1fr 1fr;gap:10px}.voices span{display:flex;align-items:baseline;gap:12px;padding:12px 16px;border-radius:16px;background:#fff;border:1px solid rgba(15,23,42,.06);border-left:5px solid var(--accent)}.voices b{flex:0 0 1.4em;color:var(--accent);font-size:24px}.voices em{color:var(--ink);font-style:normal;font-size:25px;font-weight:700}

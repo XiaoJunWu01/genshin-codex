@@ -61,7 +61,8 @@ export function gamePlugin(spec) {
       const command = this.commandOf(e.msg)
       if (!command || (command.rest && command.rest !== '帮助')) return false
       const game = gameOf(this.spec.key)
-      await e.reply([`${game.name}图鉴（${this.spec.letter} 前缀）`, ...this.spec.help].join('\n'))
+      const lines = e.isMaster ? this.spec.help : (this.spec.common || this.spec.help.slice(0, 4))
+      await e.reply([`${game.name}图鉴（${this.spec.letter} 前缀）`, ...lines].join('\n'))
       return true
     }
 

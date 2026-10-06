@@ -29,5 +29,6 @@ export default gamePlugin({
     story: { columns: 1, showIcon: false },
   },
   overview: new Set(['profile', 'story', 'ascension', 'recommend', 'effect', 'set']),
-  help: ['z妮可', '直接显示代理人简介', 'z地图 妮可', '地图等其他同名内容', 'z立绘 爱丽丝', 'z技能 爱丽丝', 'z影画 爱丽丝', 'z突破 爱丽丝', 'z音擎 绯月银棺', 'z驱动盘 呼啸沙龙', 'z影音 爱丽丝', 'z壁纸'],
+  common: ['z角色 妮可', 'z音擎 聚宝箱', 'z驱动盘 呼啸沙龙'],
+  help: ['z角色 妮可', 'z音擎 聚宝箱', 'z驱动盘 呼啸沙龙', 'z立绘 妮可', 'z技能 妮可', 'z影画 妮可', 'z突破 妮可', 'z故事 妮可', 'z地图 妮可', 'z影音 妮可', 'z壁纸'],
 })
