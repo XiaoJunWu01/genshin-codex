@@ -147,7 +147,7 @@ export function entryHtml(entry, focus, { factsOf, layoutOf, overview, links }) 
       : (!focus && section.focus === 'ascension'
         ? { ...section, groups: (section.groups || []).filter(group => group.materials?.length).slice(0, 1), text: '' }
         : section)
-    const roles = shown.focus === 'recommend' ? facesHtml(shown.cards, shown.empty || '暂无角色推荐') : ''
+    const roles = shown.focus === 'recommend' && /角色|配队/.test(shown.title) ? facesHtml(shown.cards, shown.empty || '暂无角色推荐') : ''
     const layout = layoutOf(section) || { columns: /推荐|套装|效果/.test(section.title) ? 2 : 1, showIcon: section.focus !== 'effect' && section.focus !== 'set' }
     const cards = roles ? '' : boardHtml(shown.cards, layout)
     const profile = shown.focus === 'profile' ? profileHtml(shown.lines) : ''

@@ -28,19 +28,22 @@ function formatCharacter(game, content) {
       } else if (component.componentId === 'trace_graph') {
         const cards = (data.points || []).flatMap(point => {
           const group = textOf(point.tag || point.name)
-          const scaling = traceScaling(point.tableData)
           const subs = point.subList || []
           if (!subs.length) {
             const name = textOf(point.name).split('/')[0]
+            const scaling = traceScaling(point.tableData)
             return name && scaling ? [{ name, text: '', group, scaling }] : []
           }
-          return subs.map((item, index) => ({
-            name: textOf(item.subTitle) || textOf(point.name).split('/')[0] || group,
-            text: [stripHtml(item.subDesc || item.desc), ...(item.subTag || []).map(textOf)].filter(Boolean).join('\n'),
-            icon: index === 0 ? stillOf(item.image) : '',
-            group,
-            scaling: index === 0 ? scaling : null,
-          }))
+          return subs.map((item, index) => {
+            const text = stripHtml(item.subDesc || item.desc)
+            return {
+              name: textOf(item.subTitle) || textOf(point.name).split('/')[0] || group,
+              text: [text, ...(item.subTag || []).map(textOf)].filter(Boolean).join('\n'),
+              icon: index === 0 ? stillOf(item.image) : '',
+              group,
+              scaling: index === 0 ? traceScaling(point.tableData, text) : null,
+            }
+          })
         }).filter(item => item.name && (item.text || item.scaling))
         const skills = cards.filter(card => /普攻|战技|终结技|天赋|秘技|额外能力|欢愉技|忆灵/.test(card.group))
         const rest = cards.filter(card => !skills.includes(card) && card.scaling)
@@ -48,7 +51,8 @@ function formatCharacter(game, content) {
       } else if (component.componentId === 'character_rich') {
         const focus = /星魂/.test(module.name) ? 'eidolon' : /推荐/.test(module.name) ? 'recommend' : /故事|语音|关系/.test(module.name) ? 'story' : ''
         const people = focus === 'recommend' ? peopleFromHtml(data.richText) : []
-        const cards = people.length ? people : cardsFromHtml(data.richText)
+        const eidolons = focus === 'eidolon' ? richCards(data.richText) : []
+        const cards = people.length ? people : (eidolons.length ? eidolons : cardsFromHtml(data.richText))
         const limit = focus === 'eidolon' || focus === 'recommend' ? cards.length : 8
         remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, [data.richText], [], focus))
       } else if (component.componentId === 'role_voice') {
@@ -144,17 +148,42 @@ function blocksOf(html) {
   return blocks
 }
 
-function traceScaling(table) {
+function traceScaling(table, description = '') {
   const headers = (table?.headers || []).map(textOf)
   const rows = table?.rows || []
+  const marked = [...String(description).matchAll(/【([^】]+)】/g)].map(item => item[1].split('/').map(value => value.trim()))
+  const values = marked.filter(row => row.length > 1)
+  if (values.length) {
+    const count = Math.max(...values.map(row => row.length))
+    return {
+      levels: Array.from({ length: count }, (_, index) => `LV${index + 1}`),
+      rows: values.map((row, index) => ({ name: `数值${index + 1}`, values: row })),
+    }
+  }
   if (headers.length < 2 || !rows.length) return null
   return {
     levels: rows.map(row => textOf(row?.[0])).filter(Boolean),
     rows: headers.slice(1).map((name, index) => ({
-      name,
+      name: /^数值\d+$/.test(name) ? `数值${index + 1}` : name,
       values: rows.map(row => textOf(row?.[index + 1])),
     })).filter(row => row.values.some(Boolean)),
   }
+}
+
+function richCards(html) {
+  const text = stripHtml(html).replace(/^※[\s\S]*?(?=\s*【\s*[1-6一二三四五六]\s*】)/, '').trim()
+  const marks = [...text.matchAll(/【\s*([1-6一二三四五六])\s*】/g)]
+  if (marks.length < 2) return []
+  const digits = { 一: '1', 二: '2', 三: '3', 四: '4', 五: '5', 六: '6' }
+  return marks.map((mark, index) => {
+    const block = text.slice(mark.index + mark[0].length, marks[index + 1]?.index ?? text.length).trim()
+    const lines = block.split('\n').map(line => line.trim()).filter(Boolean)
+    const name = lines[0] || ''
+    return {
+      name: `${digits[mark[1]] || mark[1]} · ${name}`,
+      text: lines.slice(1).join('\n'),
+    }
+  }).filter(card => card.name)
 }
 
 function voiceLines(html) {

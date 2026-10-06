@@ -15,7 +15,7 @@ export function markText(value) {
   return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, match => /^\d/.test(match) ? `<b>${match}</b>` : `<b class="word">${match}</b>`)
 }
 
-function placeholderGroup(value) {
+export function placeholderGroup(value) {
   return value && !/默认标题|暂无/.test(value) ? value : ''
 }
 
@@ -34,6 +34,10 @@ export function scalingHtml(scaling) {
   const levels = scaling?.levels || []
   const rows = scaling?.rows || []
   if (!levels.length || !rows.length) return ''
+  if (levels.length > 6) {
+    const lines = rows.map(row => `<div><em>${escapeHtml(row.name)}</em><b>${levels.map((level, index) => `${escapeHtml(level)} ${escapeHtml(row.values?.[index] || '')}`).join('<i></i>')}</b></div>`).join('')
+    return `<div class="meters">${lines}</div>`
+  }
   const head = levels.map(level => `<th>${escapeHtml(level)}</th>`).join('')
   const body = rows.map(row => {
     const cells = levels.map((_, index) => `<td>${escapeHtml(row.values?.[index] || '')}</td>`).join('')
@@ -247,6 +251,11 @@ section p b.word{font-weight:800}
 .scale tbody th{width:18%;color:var(--ink);text-align:left;padding-left:12px;font-size:21px}
 .scale td{color:var(--accent)}
 .scale tr:last-child th,.scale tr:last-child td{border-bottom:0}
+.meters{display:flex;flex-direction:column;gap:10px;margin-top:14px}
+.meters div{display:grid;grid-template-columns:220px 1fr;gap:14px;align-items:start;padding:12px 14px;border-radius:14px;background:#fff;border:1px solid rgba(15,23,42,.06)}
+.meters em{color:var(--ink);font-style:normal;font-size:22px;font-weight:800;line-height:1.45}
+.meters b{display:flex;flex-wrap:wrap;gap:6px 0;color:var(--accent);font-size:21px;line-height:1.45}
+.meters i{width:14px}
 .faces{display:flex;flex-wrap:wrap;gap:16px 18px}
 .faces span{display:flex;flex-direction:column;align-items:center;gap:8px;width:128px}
 .faces img{width:108px;height:108px;object-fit:cover;border-radius:24px;background:#fff;border:1px solid rgba(15,23,42,.06)}

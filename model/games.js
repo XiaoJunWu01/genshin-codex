@@ -97,6 +97,7 @@ export function stripHtml(value) {
     .replace(/<li[^>]*>/gi, '\n· ')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"')
+    .replace(/\\n/g, '\n').replace(/\\t/g, ' ')
     .replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim()
 }
 

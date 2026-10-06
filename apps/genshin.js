@@ -34,7 +34,7 @@ const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flat
 const lead = '#?g?'
 const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
-import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, imagesHtml, markText, profileGrid, resultCss, scalingHtml, talentTotal, themeOf } from './lib/theme.js'
+import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, imagesHtml, markText, placeholderGroup, profileGrid, resultCss, scalingHtml, talentTotal, themeOf } from './lib/theme.js'
 
 function runGit(args) {
   return new Promise((resolve, reject) => {
@@ -416,7 +416,18 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const shownAttrs = attrs && !source.some(section => section.focus === 'profile')
       ? `<div class="attrs">${attrs}</div>`
       : ''
-    const sections = source.map(section => {
+    const sections = source.flatMap(section => {
+      if (focus?.id === 'recommend') {
+        const grouped = new Map()
+        for (const card of section.cards || []) {
+          const key = placeholderGroup(card.group) || section.title
+          if (!grouped.has(key)) grouped.set(key, [])
+          grouped.get(key).push(card)
+        }
+        if (grouped.size > 1) return [...grouped].map(([title, cards]) => ({ ...section, title, cards, group: '' }))
+      }
+      return [section]
+    }).map(section => {
       const shown = brief(section)
       const pictures = focus ? imagesHtml(shown.images, shown.focus === 'showcase') : ''
       const profile = shown.focus === 'profile' && !(shown.cards || []).length ? profileGrid(shown.text) : ''

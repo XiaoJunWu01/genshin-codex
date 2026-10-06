@@ -6,6 +6,8 @@ import {
 import { entryCss, resultCss, themeOf } from './theme.js'
 import { GAME_CSS, boardHtml, entryHtml, pageHtml, renderHtml, resultHtml } from './page.js'
 
+const sessions = new Map()
+
 export function gamePlugin(spec) {
   const wordPattern = spec.words.join('|')
   return class extends plugin {
@@ -24,7 +26,7 @@ export function gamePlugin(spec) {
         ],
       })
       this.spec = spec
-      this.sessions = new Map()
+      this.sessions = sessions
     }
 
     commandOf(text) {
