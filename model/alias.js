@@ -4,11 +4,8 @@ import { fileURLToPath } from 'url'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function pluginFile(relative) {
-  const candidates = [
-    path.resolve(pluginRoot, '..', '..', 'plugins', relative),
-    path.join('E:\\TRSS\\home\\a\\TRSS_AllBot\\TRSS-Yunzai\\plugins', relative),
-  ]
-  return candidates.find(file => fs.existsSync(file)) || ''
+  const file = path.resolve(pluginRoot, '..', relative)
+  return fs.existsSync(file) ? file : ''
 }
 const sources = {
   gs: [
