@@ -30,5 +30,5 @@ export default gamePlugin({
     effect: { columns: 1, showIcon: false },
   },
   overview: new Set(['profile', 'ascension', 'recommend', 'effect', 'set']),
-  help: ['s流萤', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's推荐 流萤', 's光锥 记一位星神的陨落', 's遗器 坠星启航地', 's影音 流萤', 's表情包'],
+  help: ['s流萤', '直接显示角色简介', 's地图 流萤', '地图等其他同名内容', 's立绘 流萤', 's行迹 流萤', 's星魂 流萤', 's晋阶 流萤', 's推荐 流萤', 's光锥 记一位星神的陨落', 's遗器 坠星启航地', 's影音 流萤', 's表情包'],
 })

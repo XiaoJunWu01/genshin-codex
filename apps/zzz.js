@@ -28,6 +28,6 @@ export default gamePlugin({
     disk: { columns: 1, showIcon: false },
     story: { columns: 1, showIcon: false },
   },
-  overview: new Set(['profile', 'ascension', 'recommend', 'effect', 'set']),
-  help: ['z爱丽丝', 'z立绘 爱丽丝', 'z技能 爱丽丝', 'z影画 爱丽丝', 'z突破 爱丽丝', 'z音擎 绯月银棺', 'z驱动盘 呼啸沙龙', 'z影音 爱丽丝', 'z壁纸'],
+  overview: new Set(['profile', 'story', 'ascension', 'recommend', 'effect', 'set']),
+  help: ['z妮可', '直接显示代理人简介', 'z地图 妮可', '地图等其他同名内容', 'z立绘 爱丽丝', 'z技能 爱丽丝', 'z影画 爱丽丝', 'z突破 爱丽丝', 'z音擎 绯月银棺', 'z驱动盘 呼啸沙龙', 'z影音 爱丽丝', 'z壁纸'],
 })

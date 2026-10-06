@@ -174,7 +174,7 @@ function scoreItem(item, keyword) {
 }
 
 const MEDIA_ENTRY = /视频|攻略|一图流|配队|养成|玩法|解析|上手|评测|壁纸|表情/
-const ENTRY_CHANNEL = /^(?:角色|代理人|光锥|音擎|驱动盘|遗器|敌人|材料|消耗品|阅读物)$/
+export const ENTRY_CHANNEL = /^(?:角色|代理人|光锥|音擎|驱动盘|遗器|敌人|材料|消耗品|阅读物)$/
 
 function rankChannel(item) {
   const name = item.channelName || ''
@@ -207,7 +207,9 @@ export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}
   const collected = new Map()
   const add = item => {
     const score = scoreItem(item, text)
-    if (score < 95 || MEDIA_ENTRY.test(`${item.fullName || ''}${item.channelName || ''}`)) return
+    const title = `${item.fullName || ''}${item.name || ''}`
+    const extra = /地图|任务|道具|装扮|员工|商店|成就/.test(item.channelName || '')
+    if (score < 95 || MEDIA_ENTRY.test(`${title}${item.channelName || ''}`) || (extra && !channelId)) return
     const prev = collected.get(item.name)
     if (!prev || score > prev.score || (score === prev.score && rankChannel(item) < rankChannel(prev))) collected.set(item.name, { ...item, score })
   }

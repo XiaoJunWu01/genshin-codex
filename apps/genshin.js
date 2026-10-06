@@ -78,7 +78,7 @@ export default class WikiPlugin extends plugin {
       name: '观测枢图鉴',
       dsc: '原神观测枢角色、武器、圣遗物等图鉴查询',
       event: 'message',
-      priority: 500,
+      priority: 5,
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
@@ -91,9 +91,9 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(${channelPattern})\\s*(\\S+)$`, fnc: 'queryAlias', priority: 50 },
         { reg: `^${lead}([^\\s#]{1,16})(立绘|原画|全身|展示|动作|待机)$`, fnc: 'queryMedia', priority: 70 },
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
-        { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 75 },
-        { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 76 },
-        { reg: `^#(?!${reserved})([^\\s#]{2,16})$`, fnc: 'queryBare', priority: 78 },
+        { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
+        { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
+        { reg: `^#(?!${reserved})([^\\s#]{2,16})$`, fnc: 'queryBare', priority: 1 },
       ],
     })
   }
@@ -143,7 +143,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const groups = [
       ['查询', [
         ['#g角色 胡桃', '简介、满级突破和推荐装备', '角'],
-        ['g薇纳斯', '名字一致时直接出图', '查'],
+        ['#薇斯纳', '优先于其他插件，直接出图', '查'],
+        ['#地图 名字', '地图和其他同名内容', '图'],
         ['g蝶变', '角色、武器、圣遗物、敌人、食物', '名'],
         ['g胡桃立绘', '全身立绘原图', '绘'],
         ['g胡桃动作', '待机和技能动图', '动'],

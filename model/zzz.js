@@ -42,7 +42,7 @@ function formatWiki(game, page) {
         profile.push(...lines)
         const brief = lines.find(line => line.startsWith('简介：'))
         const text = brief ? brief.replace(/^简介：/, '') : lines.filter(line => !line.includes('：')).join('\n')
-        if (text) remember(sections, parts, section('角色简介', [text], [], 'profile'))
+        if (text) remember(sections, parts, section('角色简介', [text], [], 'story'))
       } else if (id === 'material_base_info') {
         const facts = [['稀有度', data.grade], ['类型', data.type]]
           .map(([key, value]) => [key, wikiValue(value)]).filter(([, value]) => value)
@@ -141,7 +141,7 @@ function formatWiki(game, page) {
   const engine = sections.some(item => item.focus === 'effect') && !agent && !disk
   const voices = sections.filter(item => item.focus === 'voice')
   const overview = agent
-    ? ['profile', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'profile' || item.title === '基础资料' || item.title === '角色简介')))
+    ? ['profile', 'story', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id === 'story' ? item.title === '角色简介' : id !== 'profile' || item.title === '基础资料')))
     : ['effect', 'set', 'ascension', 'recommend'].flatMap(id => sections.filter(item => item.focus === id && (id !== 'set' || item.title === '套装效果')))
   if (agent) overview.push(...voices)
   if (engine && !overview.some(item => item.focus === 'recommend')) {

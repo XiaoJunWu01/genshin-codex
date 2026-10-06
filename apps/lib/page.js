@@ -139,7 +139,7 @@ export function entryHtml(entry, focus, { factsOf, layoutOf, overview, links }) 
       ? [...(entry.parts?.profile || []), ...(entry.parts?.voice || [])]
       : (focus
         ? entry.parts?.[focus.id] || []
-        : (entry.sections || []).filter(section => !section.focus || overview.has(section.focus) || section.focus === 'voice')))
+        : (entry.sections || []).filter(section => !section.focus || overview.has(section.focus) || section.focus === 'voice' || (section.focus === 'story' && section.title === '角色简介'))))
   const repeated = !focus && source.some(section => section.focus === 'profile')
   const sections = source.map(section => {
     const shown = !focus && section.focus === 'recommend'
@@ -150,7 +150,7 @@ export function entryHtml(entry, focus, { factsOf, layoutOf, overview, links }) 
     const roles = shown.focus === 'recommend' && /角色|配队/.test(shown.title) ? facesHtml(shown.cards, shown.empty || '暂无角色推荐') : ''
     const layout = layoutOf(section) || { columns: /推荐|套装|效果/.test(section.title) ? 2 : 1, showIcon: section.focus !== 'effect' && section.focus !== 'set' }
     const cards = roles ? '' : boardHtml(shown.cards, layout)
-    const profile = shown.focus === 'profile' ? profileHtml(shown.lines) : ''
+    const profile = shown.focus === 'profile' && shown.lines?.length ? profileHtml(shown.lines) : ''
     const voices = shown.focus === 'voice'
       ? `<div class="voices">${(shown.lines || []).map(line => { const cut = String(line).indexOf('：'); const label = cut > 0 ? line.slice(0, cut) : ''; const actor = cut > 0 ? line.slice(cut + 1) : line; return `<span>${label ? `<b>${escapeHtml(label)}</b>` : ''}<em>${escapeHtml(actor)}</em></span>` }).join('')}</div>` : ''
     const prose = profile || voices || roles ? '' : (shown.text && !(repeated && section.focus === 'profile') ? `<p>${markText(shown.text)}</p>` : '')

@@ -171,9 +171,11 @@ function traceScaling(table, description = '') {
 }
 
 function richCards(html) {
-  const text = stripHtml(html).replace(/^※[\s\S]*?(?=\s*【\s*[1-6一二三四五六]\s*】)/, '').trim()
+  const source = String(html || '')
+  const text = stripHtml(source).replace(/^※[\s\S]*?(?=\s*【\s*[1-6一二三四五六]\s*】)/, '').trim()
   const marks = [...text.matchAll(/【\s*([1-6一二三四五六])\s*】/g)]
   if (marks.length < 2) return []
+  const icons = [...source.matchAll(/data-image-url="([^"]+)"|<img[^>]+src="([^"]+)"/g)].map(item => item[1] || item[2])
   const digits = { 一: '1', 二: '2', 三: '3', 四: '4', 五: '5', 六: '6' }
   return marks.map((mark, index) => {
     const block = text.slice(mark.index + mark[0].length, marks[index + 1]?.index ?? text.length).trim()
@@ -182,6 +184,7 @@ function richCards(html) {
     return {
       name: `${digits[mark[1]] || mark[1]} · ${name}`,
       text: lines.slice(1).join('\n'),
+      icon: icons[index] || '',
     }
   }).filter(card => card.name)
 }

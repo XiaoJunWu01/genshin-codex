@@ -1,6 +1,6 @@
 import plugin from '../../../../lib/plugins/plugin.js'
 import {
-  channelOf, channelPattern, gameOf, getGameEntry, listGame,
+  ENTRY_CHANNEL, channelOf, channelPattern, gameOf, getGameEntry, listGame,
   mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../../model/games.js'
 import { entryCss, resultCss, themeOf } from './theme.js'
@@ -13,14 +13,14 @@ export function gamePlugin(spec) {
   return class extends plugin {
     constructor() {
       super({
-        name: spec.name, dsc: spec.dsc, event: 'message', priority: 480,
+        name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
-          { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help' },
-          { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
+          { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 1 },
+          { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 1 },
           { reg: `^#?${spec.letter}(?![a-z#])(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
           { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help' },
-          { reg: `^(?:#|g)?(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query' },
+          { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 1 },
+          { reg: `^(?:#|g)?(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 1 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         ],
@@ -87,7 +87,8 @@ export function gamePlugin(spec) {
           await e.reply(channel ? `${game.name}的${channel.name}里没有「${keyword}」。` : `${game.name}没有找到「${keyword}」。`)
           return true
         }
-        const direct = !channel && !focus && exact.length === 1 ? exact[0] : null
+        const preferred = !channel && !focus ? exact.filter(item => ENTRY_CHANNEL.test(item.channelName || '')) : []
+        const direct = preferred.length === 1 ? preferred[0] : (!channel && !focus && exact.length === 1 ? exact[0] : null)
         const shown = direct ? [direct] : matched
         this.sessions.set(this.sessionKey(e), { results: shown, focus: focus?.id || '', time: Date.now() })
         if (direct || new Set(shown.map(item => item.name)).size === 1) return this.show(e, shown[0], focus)
