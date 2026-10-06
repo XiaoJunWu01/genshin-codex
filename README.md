@@ -176,8 +176,13 @@ git clone https://gitee.com/wubaojun/genshin-codex.git ./plugins/genshin-codex
 
 ```text
 genshin-codex/
-├─ apps/wiki.js      指令与图片渲染
-├─ model/wiki.js     观测枢搜索、目录筛选和词条解析
-├─ config/           底图与样式配置
-└─ resources/        默认底图
+├─ apps/genshin.js    原神指令与图片渲染
+├─ apps/sr.js         星穹铁道指令
+├─ apps/zzz.js        绝区零指令
+├─ model/wiki.js      原神搜索、目录筛选和词条解析
+├─ model/sr.js        星穹铁道词条解析
+├─ model/zzz.js       绝区零词条解析
+├─ model/games.js     三款游戏共用的请求、搜索和影音
+├─ config/            底图与样式配置
+└─ resources/         默认底图
 ```

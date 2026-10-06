@@ -859,21 +859,13 @@ function parseTables(data) {
       const entries = entriesFromHtml(cells[0])
       const images = imagesFromHtml(cells[0])
       const group = placeholderTitle(title)
-      if (entries.length > 1) {
-        const separator = stripHtml(cells[0]).includes('/') ? ' / ' : ' + '
-        cards.push({
+      if (entries.length) {
+        entries.forEach(entry => cards.push({
           group,
-          name: entries.map(entry => entry.name).join(separator),
-          icons: entries.map(entry => entry.icon).filter(Boolean),
+          name: entry.name,
+          icon: entry.icon,
           text: reason,
-        })
-      } else if (entries.length) {
-        cards.push({
-          group,
-          name: entries[0].name,
-          icon: entries[0].icon,
-          text: reason,
-        })
+        }))
       } else if (images.length === 1 && !/成长数据/.test(label)) {
         const text = cellText(cells[0])
         cards.push({
