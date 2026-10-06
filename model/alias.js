@@ -119,6 +119,49 @@ export function aliasNames(game, keyword) {
   return (indexOf(game).get(key) || []).map(item => item.name)
 }
 
+const upcomingFiles = {
+  gs: 'miao-plugin/resources/meta-gs/character/data.json',
+  sr: 'miao-plugin/resources/meta-sr/character/data.json',
+  zzz: 'ZZZ-Plugin/defSet/upcoming.yaml',
+}
+const upcomingCache = new Map()
+
+function upcomingOf(game) {
+  const cached = upcomingCache.get(game)
+  if (cached) return cached
+  const names = new Set()
+  const file = pluginFile(upcomingFiles[game] || '')
+  if (file) {
+    try {
+      if (file.endsWith('.json')) {
+        const data = JSON.parse(fs.readFileSync(file, 'utf8'))
+        const now = Date.now()
+        for (const item of Object.values(data || {})) {
+          if (item?.name && item.eta && Number(item.eta) > now) names.add(item.name)
+        }
+      } else {
+        for (const [name] of parseYaml(fs.readFileSync(file, 'utf8'))) names.add(name)
+      }
+    } catch (err) {
+      logger?.warn?.(`[图鉴别名] ${upcomingFiles[game]} 读取失败:`, err.message || err)
+    }
+  }
+  upcomingCache.set(game, names)
+  return names
+}
+
+export function upcomingName(game, keyword) {
+  const names = upcomingOf(game)
+  if (!names.size) return ''
+  const known = new Map()
+  for (const name of names) known.set(normalize(name), name)
+  for (const name of [keyword, ...aliasNames(game, keyword)]) {
+    const found = known.get(normalize(name))
+    if (found) return found
+  }
+  return ''
+}
+
 export function aliasStats() {
   return Object.fromEntries(Object.keys(sources).map(game => [game, indexOf(game).size]))
 }

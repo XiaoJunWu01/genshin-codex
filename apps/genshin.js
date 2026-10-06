@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
+import { upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -667,7 +668,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (findWikiFocus(keyword)) return false
     try {
       const found = await this.openExact(e, keyword)
-      if (!found) await e.reply(`暂无「${keyword}」的角色数据，敬请期待。`)
+      const upcoming = !found ? upcomingName('gs', keyword) : ''
+      if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
       await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))

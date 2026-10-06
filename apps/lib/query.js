@@ -3,6 +3,7 @@ import {
   ENTRY_CHANNEL, channelOf, channelPattern, gameOf, getGameEntry, listGame,
   mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../../model/games.js'
+import { upcomingName } from '../../model/alias.js'
 import { entryCss, resultCss, themeOf } from './theme.js'
 import { GAME_CSS, boardHtml, entryHtml, pageHtml, renderHtml, resultHtml } from './page.js'
 
@@ -84,9 +85,8 @@ export function gamePlugin(spec) {
         const exact = results.filter(item => item.score >= 100)
         const matched = channel || focus ? results : (exact.length ? exact : results)
         if (!matched.length) {
-          await e.reply(channel
-            ? `${game.name}的${channel.name}里暂无「${keyword}」的数据，敬请期待。`
-            : `暂无「${keyword}」的角色数据，敬请期待。`)
+          const upcoming = !channel && !focus ? upcomingName(this.spec.key === 'sr' ? 'sr' : 'zzz', keyword) : ''
+          if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
           return true
         }
         const preferred = !channel && !focus ? exact.filter(item => ENTRY_CHANNEL.test(item.channelName || '')) : []
