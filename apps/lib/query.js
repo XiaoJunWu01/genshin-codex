@@ -79,13 +79,16 @@ export function gamePlugin(spec) {
         if (!keyword) return this.catalog(e, channel)
         if (page && /影音|视频|pv|PV/.test(rest)) return this.openVideoPage(e, keyword, page)
         const results = await searchGame(this.spec.key, keyword, { channelId: channel?.id || 0, limit: 8 })
-        const matched = channel || focus ? results : results.filter(item => item.score >= 100)
+        const exact = results.filter(item => item.score >= 100)
+        const matched = channel || focus ? results : (exact.length ? exact : results)
         if (!matched.length) {
           await e.reply(channel ? `${game.name}的${channel.name}里没有「${keyword}」。` : `${game.name}没有找到「${keyword}」。`)
           return true
         }
-        this.sessions.set(this.sessionKey(e), { results: matched, focus: focus?.id || '', time: Date.now() })
-        if (new Set(matched.map(item => item.name)).size === 1) return this.show(e, matched[0], focus)
+        const direct = !channel && !focus && exact.length === 1 ? exact[0] : null
+        const shown = direct ? [direct] : matched
+        this.sessions.set(this.sessionKey(e), { results: shown, focus: focus?.id || '', time: Date.now() })
+        if (direct || new Set(shown.map(item => item.name)).size === 1) return this.show(e, shown[0], focus)
         await this.replyImage(e, pageHtml({
           title: `「${keyword}」`, subtitle: `${game.name}有多个结果`, body: resultHtml(matched),
           footer: `发送 ${this.spec.letter}1 打开对应条目`, extraCss: resultCss,

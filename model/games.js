@@ -111,7 +111,7 @@ function normalizeName(value) {
 }
 
 export function shortName(value) {
-  return stripHtml(value).replace(/[（(][^）)]*[）)]/g, '').split(/[·:：]/)[0].trim()
+  return stripHtml(value).replace(/[（(][^）)]*[）)]/g, '').split(/[·•・:：丨|]/)[0].trim()
 }
 
 export function parseItemFilters(value) {
@@ -172,10 +172,13 @@ function scoreItem(item, keyword) {
   return Math.max(rank(item.name), rank(item.fullName), rank(item.alias), mapped ? 100 : 0)
 }
 
+const MEDIA_ENTRY = /视频|攻略|一图流|配队|养成|玩法|解析|上手|评测|壁纸|表情/
+const ENTRY_CHANNEL = /^(?:角色|代理人|光锥|音擎|驱动盘|遗器|敌人|材料|消耗品|阅读物)$/
+
 function rankChannel(item) {
   const name = item.channelName || ''
-  if (/角色|代理人|光锥|音擎|驱动盘|遗器|敌人|材料/.test(name)) return 0
-  if (/视频|攻略|地图/.test(name)) return 2
+  if (ENTRY_CHANNEL.test(name)) return 0
+  if (/视频|攻略|地图|玩法|壁纸|表情/.test(name)) return 2
   return 1
 }
 
@@ -189,7 +192,7 @@ async function searchRemote(game, keyword) {
     summary: stripHtml(item.summary || ''),
     channelId: Number(item.channels?.[0]?.channel_id || 0),
     channelName: item.channels?.[0]?.name || '', game: game.key,
-  })).filter(item => item.id && item.name && item.channelId && !/攻略|一图流|配队|养成/.test(item.fullName))
+  })).filter(item => item.id && item.name && item.channelId && !MEDIA_ENTRY.test(`${item.fullName}${item.channelName}`))
   cache.searches.set(cacheKey, { time: Date.now(), items })
   return items
 }
@@ -203,7 +206,7 @@ export async function searchGame(key, keyword, { channelId = 0, limit = 8 } = {}
   const collected = new Map()
   const add = item => {
     const score = scoreItem(item, text)
-    if (score < 95) return
+    if (score < 95 || MEDIA_ENTRY.test(`${item.fullName || ''}${item.channelName || ''}`)) return
     const prev = collected.get(item.name)
     if (!prev || score > prev.score || (score === prev.score && rankChannel(item) < rankChannel(prev))) collected.set(item.name, { ...item, score })
   }
