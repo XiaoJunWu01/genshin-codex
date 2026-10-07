@@ -551,7 +551,7 @@ export function parseWikiQuery(input = '') {
       continue
     }
     const matched = findWikiChannel(token)
-    if (matched && !channel && words.length) {
+    if (matched && !channel) {
       channel = matched
       continue
     }
