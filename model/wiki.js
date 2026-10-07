@@ -101,6 +101,10 @@ function normalizeName(value) {
   return stripHtml(value).replace(/[【】\[\]()（）·\s]/g, '').toLowerCase()
 }
 
+export function normalizeWikiName(value) {
+  return normalizeName(value)
+}
+
 // 观测枢词条的 alias_name 是空的，角色俗称只能在本地维护。
 const CHARACTER_ALIASES = {
   薇斯纳: ['维纳斯', '薇纳斯', '薇奈斯', '维奈斯', '维纳', '维斯纳', '维斯娜'],

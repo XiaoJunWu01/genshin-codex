@@ -15,6 +15,7 @@ import {
   clipText,
   findWikiChannel,
   findWikiFocus,
+  normalizeWikiName,
   getWikiEntry,
   listWikiChannel,
   getWikiCalendar,
@@ -150,14 +151,18 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['z音擎 聚宝箱', '音擎效果和突破材料', '擎'],
         ['z驱动盘 呼啸沙龙', '驱动盘套装效果', '盘'],
       ]],
-      ...(e.isMaster ? [['原神扩展', [
-        ['g胡桃', '名字一致时直接出图', '查'],
-        ['g胡桃立绘', '全身立绘原图', '绘'],
-        ['g胡桃动作', '待机和技能动图', '动'],
+      ...(e.isMaster ? [['原神角色', [
+        ['g胡桃', '名字完全一致时直接出图', '查'],
+        ['g立绘 胡桃', '全身立绘原图', '绘'],
+        ['g动作 胡桃', '待机和技能动图', '动'],
         ['g天赋 胡桃', '天赋全文和伤害倍率', '天'],
         ['g命座 胡桃', '六条命之座', '命'],
-        ['g故事 胡桃', '角色故事', '故'],
-        ['g图鉴 银釭', '按关键字搜索全部词条', '搜'],
+        ['g突破 胡桃', '突破材料和满级合计', '突'],
+        ['g故事 胡桃', '角色故事和配音', '故'],
+        ['g推荐 胡桃', '武器和圣遗物推荐', '荐'],
+        ['g资料 胡桃', '生日、称号和所属', '档'],
+      ]],
+      ['原神其他', [
         ['#敌人 丘丘人', '敌人资料', '敌'],
         ['#食物 甜甜花酿鸡', '食谱和食用效果', '食'],
         ['#材料 霓裳花', '材料来源和用途', '材'],
@@ -168,26 +173,32 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         ['#秘境 荒坠的圣迹', '秘境和洞天', '境'],
         ['#深渊 深境螺旋第8层', '深渊、剧诗和危战', '渊'],
         ['#行动牌 七循之理', '七圣召唤卡牌', '牌'],
-        ['#名片 原神·印象', '名片原图', '片'],
-        ['#头像 锋锐', '头像和装扮', '像'],
+        ['#名片 原神·印象', '名片资料和原图', '片'],
+        ['#头像 锋锐', '头像资料', '像'],
         ['#NPC 叶尔莫莱', 'NPC 和商店', '人'],
+        ['g图鉴 银釭', '按关键字搜索全部词条', '搜'],
         ['g影音 薇斯纳', '先看封面，再选一条播放', '影'],
         ['g图鉴目录 角色 火 五星', '分类、筛选和日历', '目'],
       ]],
       ['星穹铁道扩展', [
+        ['s立绘 流萤', '角色立绘', '绘'],
         ['s行迹 流萤', '行迹全文', '迹'],
         ['s星魂 流萤', '六条星魂', '魂'],
         ['s晋阶 流萤', '晋阶材料和满级属性', '阶'],
+        ['s推荐 流萤', '光锥和遗器推荐', '荐'],
+        ['s故事 流萤', '角色故事', '故'],
+        ['s地图 流萤', '地图等其他同名内容', '图'],
         ['s影音 流萤', '先选一条再播放', '影'],
-        ['s光锥 记一位星神的陨落', '光锥效果和晋阶材料', '锥'],
-        ['s表情包', '米游社表情包', '表'],
+        ['s表情包', '米游社表情包分组', '表'],
       ]],
       ['绝区零扩展', [
-        ['z技能 妮可', '技能全文', '技'],
+        ['z立绘 妮可', '代理人立绘', '绘'],
+        ['z技能 妮可', '技能图标和全文', '技'],
         ['z影画 妮可', '代理人影画', '画'],
         ['z突破 妮可', '突破材料和信赖奖励', '突'],
+        ['z故事 妮可', '代理人故事', '故'],
+        ['z地图 妮可', '地图等其他同名内容', '图'],
         ['z影音 妮可', '先选一条再播放', '影'],
-        ['z音擎 聚宝箱', '音擎和突破材料', '擎'],
         ['z壁纸', '节日和版本壁纸', '纸'],
       ]],
       ['主人设置', [
@@ -207,7 +218,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         <h2>${title}</h2>
         <div class="grid">${items.map(([cmd, desc, mark]) => `<div class="cell"><i>${mark}</i><div><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">原神 g，星铁 s，绝区零 z。空格可有可无。设置类指令只在主人的帮助里显示</div>
+      <div class="foot">普通帮助只显示三个游戏的常用查询。主人发送 #图鉴帮助 可查看全部有效指令</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
@@ -679,12 +690,14 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const keyword = matched?.[2] || ''
     if (!focus || !keyword) return false
     try {
+      const channel = findWikiChannel(keyword)
+      if (channel) {
+        e.msg = `#图鉴目录 ${channel.name}`
+        return this.showCatalog(e)
+      }
       const results = await searchWiki(keyword, { limit: 8 })
       const exact = results.filter(item => item.score >= 100)
-      if (!exact.length) {
-        await e.reply(`没有找到「${keyword}」。可以先看 #图鉴 ${keyword}`)
-        return true
-      }
+      if (!exact.length) return false
       const chosen = this.uniqueHit(exact)
       if (chosen) {
         await this.showEntry(e, chosen, '', focus)
@@ -748,7 +761,10 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }
 
       const results = await searchWiki(parsed.keyword, { channelId: parsed.channel?.id || 0, limit: 20 })
-      const matched = parsed.channel ? results : results.filter(item => item.score >= 100)
+      const wanted = normalizeWikiName(parsed.keyword)
+      const matched = parsed.channel
+        ? results.filter(item => normalizeWikiName(item.name) === wanted)
+        : results.filter(item => item.score >= 100)
       if (!matched.length) {
         await e.reply(parsed.channel
           ? `${parsed.channel.name}里没有「${parsed.keyword}」。`
