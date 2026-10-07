@@ -56,7 +56,7 @@ function formatWiki(game, page) {
       } else if (id === 'role_talent') {
         const cards = (data.list || []).flatMap(item => item.children || []).map(item => ({
           name: [textOf(item.tab_name), textOf(item.title)].filter(Boolean).join(' · ') || textOf(item.title),
-          text: stripHtml(item.desc), icon: stillOf(item.icon),
+          text: stripHtml(item.desc), icon: item.icon || item.animated_icon || '',
           scaling: growthScaling(item.growth),
         })).filter(item => item.name && item.text && !/职级晋升|滑动滑块|词条释义/.test(item.text))
         const promotions = (data.list || []).flatMap(item => item.children || []).flatMap(item => promotionGroups(item.growth))
@@ -212,7 +212,11 @@ function promotionGroups(growth) {
 }
 
 function ascensionGroups(list) {
-  return (list || []).map(level => ({
+  const levels = list || []
+  const numbered = levels.map(level => Number(String(level.tabName || level.tab_name || '').match(/\d+/)?.[0] || 0))
+  const maxLevel = Math.max(0, ...numbered)
+  const shown = maxLevel ? levels.filter((_, index) => numbered[index] === maxLevel) : levels
+  return shown.map(level => ({
     name: textOf(level.tabName || level.tab_name),
     materials: (level.materials || []).map(item => ({
       name: textOf(item.title || item.nickname || item.name),
