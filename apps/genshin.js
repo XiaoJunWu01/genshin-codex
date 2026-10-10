@@ -652,9 +652,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
-    if (!keyword || keyword.length > 16 || /^\d+$/.test(keyword)) return false
-    const found = await this.openExact(e, keyword)
-    return found ? true : false
+    if (!keyword || keyword.length > 8 || /^\d+$/.test(keyword)) return false
+    if (!/^[\u4e00-\u9fffA-Za-z·]{2,8}$/.test(keyword)) return false
+    const results = await searchWiki(keyword, { channelId: 25, limit: 5 })
+    if (!results.some(item => item.score >= 100)) return false
+    return this.openExact(e, keyword)
   }
 
   async queryIndex(e) {
