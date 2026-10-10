@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { upcomingName } from '../model/alias.js'
+import { characterPattern, upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -28,9 +28,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.join(__dirname, '..')
 const sessions = new Map()
 const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a, b) => b.length - a.length).join('|')
-const reserved = ['图鉴', '观测枢', 'wiki', '背包', ...WIKI_CHANNELS.flatMap(channel => channel.aliases)]
-  .sort((a, b) => b.length - a.length)
-  .join('|')
 // # 和 g 两种前缀都能进入全部指令，空格可有可无。
 const lead = '#?g?'
 const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
@@ -93,7 +90,7 @@ export default class WikiPlugin extends plugin {
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
-        { reg: `^#(?!${reserved})([^\\s#]{2,16})$`, fnc: 'queryBare', priority: 1 },
+        ...(characterPattern('gs') ? [{ reg: `^#(${characterPattern('gs')})$`, fnc: 'queryBare', priority: 1 }] : []),
       ],
     })
   }
@@ -652,10 +649,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
-    if (!keyword || keyword.length > 8 || /^\d+$/.test(keyword)) return false
-    if (!/^[\u4e00-\u9fffA-Za-z·]{2,8}$/.test(keyword)) return false
-    const results = await searchWiki(keyword, { channelId: 25, limit: 5 })
-    if (!results.some(item => item.score >= 100)) return false
+    if (!keyword) return false
     return this.openExact(e, keyword)
   }
 
