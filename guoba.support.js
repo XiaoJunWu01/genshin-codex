@@ -64,6 +64,28 @@ export function supportGuoba() {
         { field: 'titleColor', label: '标题颜色', component: 'ColorPicker' },
         { field: 'commandColor', label: '指令颜色', component: 'ColorPicker' },
         { field: 'textColor', label: '说明颜色', component: 'ColorPicker' },
+        { label: '帮助内容', component: 'SOFT_GROUP_BEGIN' },
+        {
+          field: 'helpGroups', label: '帮助分组', bottomHelpMessage: '可直接增删分组和指令。普通用户只显示勾选了常用的分组',
+          component: 'GSubForm',
+          componentProps: {
+            multiple: true,
+            schemas: [
+              { field: 'group', label: '分组名称', component: 'Input', required: true },
+              { field: 'common', label: '普通用户可见', component: 'Switch' },
+              {
+                field: 'list', label: '指令列表', component: 'GSubForm',
+                componentProps: {
+                  multiple: true,
+                  schemas: [
+                    { field: 'title', label: '指令', component: 'Input', required: true },
+                    { field: 'desc', label: '说明', component: 'Input', required: true },
+                  ],
+                },
+              },
+            ],
+          },
+        },
         { label: '背景图', component: 'SOFT_GROUP_BEGIN' },
         { field: 'backgroundPath', label: '当前背景', component: 'Input', componentProps: { disabled: true } },
         {

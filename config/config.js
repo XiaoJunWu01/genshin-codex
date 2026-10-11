@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { defaultHelp } from './help.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.join(__dirname, '..')
@@ -17,6 +18,19 @@ export const defaultConfig = {
   commandColor: '#fff3cf',
   textColor: '#ffffff',
   fontFamily: 'Microsoft YaHei',
+  helpGroups: defaultHelp,
+}
+
+function normalizeHelp(value) {
+  const groups = Array.isArray(value) && value.length ? value : defaultHelp
+  return groups.map(group => ({
+    group: String(group?.group || '未命名').slice(0, 20),
+    common: group?.common === true,
+    list: (Array.isArray(group?.list) ? group.list : []).map(item => ({
+      title: String(item?.title || '').slice(0, 40),
+      desc: String(item?.desc || '').slice(0, 40),
+    })).filter(item => item.title),
+  })).filter(group => group.list.length)
 }
 
 function colorOf(value, fallback) {
@@ -43,6 +57,7 @@ function normalizeConfig(config = {}) {
     commandColor: colorOf(config.commandColor, defaultConfig.commandColor),
     textColor: colorOf(config.textColor, defaultConfig.textColor),
     fontFamily: String(config.fontFamily || defaultConfig.fontFamily).slice(0, 80),
+    helpGroups: normalizeHelp(config.helpGroups),
   }
 }
 
