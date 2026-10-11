@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { aliasNames, upcomingName } from '../model/alias.js'
+import { aliasKinds, aliasNames, upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -76,7 +76,7 @@ export default class WikiPlugin extends plugin {
       name: '观测枢图鉴',
       dsc: '原神观测枢角色、武器、圣遗物等图鉴查询',
       event: 'message',
-      priority: 5,
+      priority: 1,
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
@@ -629,6 +629,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (!keyword || keyword.length > 16 || /帮助|视频|图鉴|目录|列表|更新/.test(keyword)) return false
     if (findWikiFocus(keyword)) return false
     try {
+      if (/专武|专属武器/.test(keyword)) return this.openSignature(e, keyword)
       const found = await this.openExact(e, keyword)
       const upcoming = !found ? upcomingName('gs', keyword) : ''
       if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
@@ -641,9 +642,40 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
+    if (/专武|专属武器/.test(keyword)) return this.openSignature(e, keyword)
+    const upcoming = upcomingName('gs', keyword)
+    if (upcoming) {
+      await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
+      return true
+    }
     const names = aliasNames('gs', keyword)
     if (!names.length) return false
     return this.openExact(e, names[0])
+  }
+
+  async openSignature(e, keyword) {
+    const role = keyword.replace(/专武|专属武器/g, '').trim()
+    const names = aliasNames('gs', keyword)
+    const kinds = aliasKinds('gs', keyword)
+    if (names.length && kinds.includes('weapon')) return this.openExact(e, names[0])
+    const roleName = aliasNames('gs', role)[0] || role
+    const results = await searchWiki(roleName, { limit: 12 })
+    const character = results.find(item => item.score >= 100 && /角色/.test(item.channelName || ''))
+    if (!character) {
+      const upcoming = upcomingName('gs', role)
+      if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
+      return true
+    }
+    const entry = await getWikiEntry(character.id)
+    const cards = (entry.parts?.recommend || []).flatMap(section => section.cards || [])
+    const weapon = cards.find(card => /武器/.test(card.group || '') && card.name)
+    if (!weapon) {
+      await e.reply(`「${roleName}」暂无专属武器，可以查看 g推荐 ${roleName}`)
+      return true
+    }
+    const found = await this.openExact(e, weapon.name)
+    if (!found) await e.reply(`「${roleName}」的推荐武器是「${weapon.name}」，但图鉴里暂时没有该武器详情。`)
+    return true
   }
 
   async queryIndex(e) {
