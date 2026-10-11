@@ -98,7 +98,7 @@ export function gamePlugin(spec) {
         if (!channel && !focus && /专武|专属音擎|专属光锥/.test(keyword)) {
           const weaponChannel = (await channelsOf(this.spec.key)).find(item => /音擎|光锥|武器/.test(item.name))
           if (!kinds.includes('weapon') || !weaponChannel || !official) {
-            await e.reply(`「${keyword.replace(/专武|专属音擎|专属光锥/g, '')}」暂无专属${weaponChannel?.name || '武器'}，可以查看 ${this.spec.letter}推荐 ${keyword.replace(/专武|专属音擎|专属光锥/g, '')}`)
+            await e.reply(`「${keyword.replace(/专武|专属音擎|专属光锥/g, '')}」暂无专属${weaponChannel?.name || '武器'}，可以查看 ${this.spec.mark || '#'}推荐 ${keyword.replace(/专武|专属音擎|专属光锥/g, '')}`)
             return true
           }
           return this.openResults(e, await searchGame(this.spec.key, official, { channelId: weaponChannel.id, limit: 8 }), official, weaponChannel, null)
@@ -159,7 +159,7 @@ export function gamePlugin(spec) {
         title: `${game.name} · ${channel.name}`,
         subtitle: `第 1/${result.totalPage} 页 · 共 ${result.total} 条`,
         body: boardHtml(result.items.map((item, index) => ({ name: `${index + 1}. ${item.name}`, icon: item.icon, text: item.summary })), { columns: 4, showIcon: true }),
-        footer: `发送 ${this.spec.letter}1 或 ${this.spec.mark || '#'}1 打开对应条目 · 查询：${this.spec.letter}${channel.name} 名字`,
+        footer: `发送 ${this.spec.mark || '#'}1 打开对应条目 · 查询：${this.spec.mark || '#'}${channel.name} 名字`, 
         extraCss: GAME_CSS,
       }), `${channel.name}共 ${result.total} 条`)
       return true
@@ -177,7 +177,7 @@ export function gamePlugin(spec) {
       }
       const target = cached && Date.now() - cached.time < 10 * 60 * 1000 ? cached.results[index - 1] : null
       if (!target) {
-        await e.reply(`没有这条序号。请先搜索，例如 ${this.spec.letter}名字 或 ${this.spec.mark || '#'}名字`)
+        await e.reply(`没有这条序号。请先搜索，例如 ${this.spec.mark || '#'}名字`)
         return true
       }
       return this.show(e, target, this.focusOf(cached.focus))
@@ -207,7 +207,7 @@ export function gamePlugin(spec) {
         return true
       }
       const links = !focus || focus.id === 'detail'
-        ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => this.focusOf(id)?.name).filter(Boolean).map(label => `${this.spec.letter}${label} ${entry.name}`)
+        ? Object.keys(entry.parts || {}).filter(id => id !== 'detail').map(id => this.focusOf(id)?.name).filter(Boolean).map(label => `${this.spec.mark || '#'}${label} ${entry.name}`)
         : []
       const lines = [`${entry.name}${focus ? ' · ' + focus.name : ''}`, (entry.tags || []).join(' · ')]
       for (const section of source.slice(0, 3)) lines.push(section.title)
@@ -267,11 +267,11 @@ export function gamePlugin(spec) {
       const spec = mediaOf(this.spec.key)
       const keyword = command.rest.replace(/^(?:表情包|壁纸|影音|pv|PV|角色视频|其他视频)/, '').trim()
       if (spec?.kind === 'wallpaper' && /表情包/.test(command.rest)) {
-        await e.reply(`${game.name}没有表情包收录，发送 ${this.spec.letter}壁纸 查看壁纸。`)
+        await e.reply(`${game.name}没有表情包收录，发送 ${this.spec.mark || '#'}壁纸 查看壁纸。`)
         return true
       }
       if (spec?.kind === 'emoji' && /壁纸/.test(command.rest)) {
-        await e.reply(`${game.name}的收录是表情包，发送 ${this.spec.letter}表情包。`)
+        await e.reply(`${game.name}的收录是表情包，发送 ${this.spec.mark || '#'}表情包。`)
         return true
       }
       if (spec?.videos && /^(?:影音|pv|PV|角色视频|其他视频)/.test(command.rest)) return this.showMedia(e, keyword)
@@ -280,7 +280,7 @@ export function gamePlugin(spec) {
         const groups = await mediaGroups(this.spec.key)
         const chosen = keyword ? groups.find(item => item.name === keyword) || groups.find(item => item.name.includes(keyword)) : null
         if (!chosen) {
-          await e.reply([`${game.name}${spec.name}`, ...groups.slice(0, 20).map(item => `${this.spec.letter}${spec.name} ${item.name}`)].join('\n'))
+          await e.reply([`${game.name}${spec.name}`, ...groups.slice(0, 20).map(item => `${this.spec.mark || '#'}${spec.name} ${item.name}`)].join('\n'))
           return true
         }
         const images = await mediaImages(this.spec.key, chosen.name)
@@ -303,8 +303,8 @@ export function gamePlugin(spec) {
         if (!keyword) {
           const items = await mediaGroups(this.spec.key)
           const groups = spec.groups || spec.videos || []
-          const lines = groups.map(group => `${this.spec.letter}${group.name}（${items.filter(item => item.group === group.name).length}）`)
-          await e.reply([`${game.name}${spec.name}`, ...lines, `搜索：${this.spec.letter}影音 名字`].join('\n'))
+          const lines = groups.map(group => `${this.spec.mark || '#'}${group.name}（${items.filter(item => item.group === group.name).length}）`)
+          await e.reply([`${game.name}${spec.name}`, ...lines, `搜索：${this.spec.mark || '#'}影音 名字`].join('\n'))
           return true
         }
         const result = await mediaVideos(this.spec.key, keyword)
@@ -332,7 +332,7 @@ export function gamePlugin(spec) {
         text: item.summary || item.group || '',
         icons: item.cover ? [item.cover] : [],
       }))
-      const next = current < totalPage ? `<br>下一页：${this.spec.letter}影音 ${keyword} ${current + 1}` : ''
+      const next = current < totalPage ? `<br>下一页：${this.spec.mark || '#'}影音 ${keyword} ${current + 1}` : ''
       await this.replyImage(e, pageHtml({
         title: `「${keyword}」的视频`,
         subtitle: `${game.name} · 第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,

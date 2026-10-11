@@ -423,7 +423,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       return
     }
     const hint = focus
-      ? `返回总览：#图鉴 ${entry.name}`
+      ? `返回总览：#${entry.name}`
       : (extraFooter || '数据来源：米游社观测枢')
     await this.replyImage(e, this.wrapHtml({
       title: focus ? `${entry.name} · ${focus.name}` : entry.name,
@@ -445,7 +445,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       if (!keyword && !kind) {
         const items = await mediaGroups('ys')
         const count = name => items.filter(item => item.group === name).length
-        await e.reply(['原神影音', `#角色视频（${count('角色视频')}）`, `#过场动画（${count('过场动画')}）`, `#其他视频（${count('其他视频')}）`, '搜索：#影音 名字，选序号播放；字母写法：g影音'].join('\n'))
+        await e.reply(['原神影音', `#角色视频（${count('角色视频')}）`, `#过场动画（${count('过场动画')}）`, `#其他视频（${count('其他视频')}）`, '搜索：#影音 名字，选序号播放；字母别名：g影音'].join('\n'))
         return true
       }
       const result = await mediaVideos('ys', keyword || kind)
@@ -473,7 +473,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       const summary = clipText(item.summary || item.group || '', 72)
       return `<div class="result">${icon}<div><b>${no}. ${escapeHtml(item.name)}</b><span>${escapeHtml(item.group || '视频')}</span>${summary ? `<em>${escapeHtml(summary)}</em>` : ''}</div></div>`
     }).join('')
-    const next = current < totalPage ? `<br>下一页：g影音 ${keyword} ${current + 1}` : ''
+    const next = current < totalPage ? `<br>下一页：#影音 ${keyword} ${current + 1}` : ''
     await this.replyImage(e, this.wrapHtml({
       title: `「${keyword}」的视频`,
       subtitle: `第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,
@@ -557,7 +557,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const keyword = String(matched?.[2] || '').trim()
     if (!channel || !keyword || keyword.length > 12 || keyword.length < 2 || /图鉴|观测枢|wiki/.test(keyword)) return false
     const focus = findWikiFocus(matched?.[1])
-    e.msg = focus ? `#g${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
+    e.msg = focus ? `#${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
     return focus ? this.queryFocus(e) : this.query(e)
   }
 
@@ -566,7 +566,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const focus = findWikiFocus(matched?.[2])
     const keyword = matched?.[1] || ''
     if (!focus || !keyword || /^(图鉴|观测枢|wiki|角色|武器)$/.test(keyword)) return false
-    e.msg = `#g${focus.name} ${keyword}`
+    e.msg = `#${focus.name} ${keyword}`
     return this.queryFocus(e)
   }
 
@@ -616,7 +616,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const cards = (entry.parts?.recommend || []).flatMap(section => section.cards || [])
     const weapon = cards.find(card => /武器/.test(card.group || '') && card.name)
     if (!weapon) {
-      await e.reply(`「${roleName}」暂无专属武器，可以查看 g推荐 ${roleName}`)
+      await e.reply(`「${roleName}」暂无专属武器，可以查看 #推荐 ${roleName}`)
       return true
     }
     const found = await this.openExact(e, weapon.name)
@@ -626,7 +626,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryIndex(e) {
     const index = parseInt(String(e.msg || '').replace(/^#?g\s*/, '').replace(/^#\s*/, ''), 10)
-    e.msg = `#图鉴 ${index}`
+    e.msg = `#${index}`
     return this.query(e)
   }
 
@@ -715,7 +715,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           ? cached.results[index]
           : null
         if (!target) {
-          await e.reply('没有这条序号。请先搜索，例如 #图鉴 银釭')
+          await e.reply('没有这条序号。请先搜索，例如 #银釭')
           return true
         }
         await this.showEntry(e, target, '', findWikiFocus(cached.focus))
@@ -742,7 +742,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
       const chosen = parsed.page === 1 ? this.uniqueHit(matched) : null
       if (chosen) {
-        const extra = matched.length > 1 ? `还有 ${matched.length - 1} 个相关结果，发送 g2 查看` : ''
+        const extra = matched.length > 1 ? `还有 ${matched.length - 1} 个相关结果，发送 #2 查看` : ''
         await this.showEntry(e, chosen, extra)
         return true
       }
