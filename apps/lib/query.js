@@ -18,12 +18,12 @@ export function gamePlugin(spec) {
       super({
         name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
-          { reg: `^[${marks}]图鉴目录(?:\\s*\\S.*)?$`, fnc: 'catalogCommand', priority: 1 },
+          { reg: `^[${marks}](?:图鉴)?(?:目录|列表|分类)(?:\\s*\\S.*)?$`, fnc: 'catalogCommand', priority: 0 },
           { reg: `^[${marks}](?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^\\${mark}[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
+          { reg: `^\\${mark}(?!图鉴目录|图鉴帮助|帮助|影音|表情包|壁纸|角色视频|其他视频)[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
           { reg: `^[${marks}](?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
           { reg: `^[${marks}]\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
           { reg: `^(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
@@ -142,7 +142,7 @@ export function gamePlugin(spec) {
     }
 
     async catalogCommand(e) {
-      const rest = String(e.msg || '').replace(/^[^\s]*图鉴目录\s*/, '').trim()
+      const rest = String(e.msg || '').replace(/^[^\s]*(?:图鉴)?(?:目录|列表|分类)\s*/, '').trim()
       const channel = rest ? await channelOf(this.spec.key, rest.split(/\s+/)[0]) : null
       return this.catalog(e, channel)
     }
@@ -154,12 +154,13 @@ export function gamePlugin(spec) {
         return true
       }
       const result = await listGame(this.spec.key, channel, 1)
+       this.sessions.set(this.sessionKey(e), { results: result.items, focus: '', time: Date.now(), kind: 'catalog' })
       await this.replyImage(e, pageHtml({
         title: `${game.name} · ${channel.name}`,
         subtitle: `第 1/${result.totalPage} 页 · 共 ${result.total} 条`,
-        body: resultHtml(result.items),
-        footer: `查询：${this.spec.letter}${channel.name} 名字`,
-        extraCss: resultCss,
+        body: boardHtml(result.items.map((item, index) => ({ name: `${index + 1}. ${item.name}`, icon: item.icon, text: item.summary })), { columns: 4, showIcon: true }),
+        footer: `发送 ${this.spec.letter}1 或 ${this.spec.mark || '#'}1 打开对应条目 · 查询：${this.spec.letter}${channel.name} 名字`,
+        extraCss: GAME_CSS,
       }), `${channel.name}共 ${result.total} 条`)
       return true
     }
@@ -176,7 +177,7 @@ export function gamePlugin(spec) {
       }
       const target = cached && Date.now() - cached.time < 10 * 60 * 1000 ? cached.results[index - 1] : null
       if (!target) {
-        await e.reply(`没有这条序号。请先搜索，例如 ${this.spec.letter}名字`)
+        await e.reply(`没有这条序号。请先搜索，例如 ${this.spec.letter}名字 或 ${this.spec.mark || '#'}名字`)
         return true
       }
       return this.show(e, target, this.focusOf(cached.focus))

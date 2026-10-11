@@ -29,7 +29,7 @@ const pluginRoot = path.join(__dirname, '..')
 const sessions = new Map()
 const channelPattern = WIKI_CHANNELS.flatMap(channel => channel.aliases).sort((a, b) => b.length - a.length).join('|')
 // # 和 g 两种前缀都能进入全部指令，空格可有可无。
-const lead = '#?g?'
+const lead = '(?:#|g)'
 const shortPattern = `^(?:${lead})(${WIKI_FOCUS_PATTERN})?\\s*(.+?)\\s*(${channelPattern})$`
 
 import { cardsHtml, entryCss, escapeHtml, facesHtml, groupsHtml, imagesHtml, markText, placeholderGroup, profileGrid, resultCss, scalingHtml, talentTotal, themeOf } from './lib/theme.js'
@@ -81,7 +81,7 @@ export default class WikiPlugin extends plugin {
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
         { reg: `^${lead}(?:影音|影音回廊|pv|PV|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
-        { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog' },
+        { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog', priority: 0 },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
         { reg: `^${lead}(?:图鉴|观测枢|wiki)\\s*(.+)$`, fnc: 'query' },
         { reg: `^${lead}(${WIKI_FOCUS_PATTERN})\\s*(\\S+)$`, fnc: 'queryFocus' },
@@ -90,6 +90,7 @@ export default class WikiPlugin extends plugin {
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
+        { reg: '^#\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
         { reg: '^#[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
       ],
     })
@@ -396,7 +397,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return {
       totalPage,
       body: `<div class="results">${rows}</div>`,
-      footer: `发送 g序号 查看，例如 g${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`,
+      footer: `发送 g序号 或 #序号 查看，例如 g${start + 1}、#${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`, 
     }
   }
 
@@ -624,7 +625,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async queryIndex(e) {
-    const index = parseInt(String(e.msg || '').replace(/^#?g\s*/, ''), 10)
+    const index = parseInt(String(e.msg || '').replace(/^#?g\s*/, '').replace(/^#\s*/, ''), 10)
     e.msg = `#图鉴 ${index}`
     return this.query(e)
   }
@@ -644,7 +645,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: `「${keyword}」`,
       subtitle: '有多个同名词条，发送序号打开',
       body: view.body,
-      footer: '例如 g1',
+      footer: '例如 g1 或 #1',
       extraCss: resultCss,
     }), `${keyword}有多个同名词条`)
     return true
@@ -675,7 +676,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         title: `「${keyword}」`,
         subtitle: `选一个再看${focus.name}`,
         body: view.body,
-        footer: `发送 g序号 查看${focus.name}，例如 g1`,
+        footer: `发送 g序号 或 #序号 查看${focus.name}，例如 g1、#1`,
         extraCss: resultCss,
       }))
     } catch (err) {
