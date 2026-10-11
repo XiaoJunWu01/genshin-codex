@@ -91,7 +91,7 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
         { reg: '^#\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
-        { reg: '^#[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
+        { reg: '^#(?!角色记录$|角色面板$|角色卡$|角色详情$|角色攻略$)[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
       ],
     })
   }
