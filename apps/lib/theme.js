@@ -7,12 +7,17 @@ export function escapeHtml(value) {
     .replace(/'/g, '&#39;')
 }
 
-const KEYWORDS = ['风属性','火属性','冰属性','电属性','物理属性','以太属性','风','火','水','雷','冰','岩','草','物理','以太','电','烈霜','单手剑','双手剑','长柄武器','法器','弓','攻击力','生命值','防御力','元素精通','元素充能效率','暴击率','暴击伤害','元素伤害','物理伤害','治疗加成','护盾强效','异常精通','冲击力','穿透率','异常掌控','能量自动回复']
-  .sort((a, b) => b.length - a.length)
+const WORD_COLORS = {
+  风属性: '#378383', 火属性: '#B8584B', 冰属性: '#5FACC1', 电属性: '#6455A6', 物理属性: '#C09257', 以太属性: '#8A4FA3',
+  风元素伤害: '#378383', 火元素伤害: '#B8584B', 水元素伤害: '#518ABB', 雷元素伤害: '#6455A6', 冰元素伤害: '#5FACC1', 岩元素伤害: '#C09257', 草元素伤害: '#6D9840',
+  风: '#378383', 火: '#B8584B', 水: '#518ABB', 雷: '#6455A6', 冰: '#5FACC1', 岩: '#C09257', 草: '#6D9840',
+  物理: '#C09257', 以太: '#8A4FA3', 电: '#6455A6', 烈霜: '#5FACC1',
+}
+const WORDS = Object.keys(WORD_COLORS).sort((a, b) => b.length - a.length)
 
 export function markText(value) {
-  const pattern = new RegExp(`(${KEYWORDS.join('|')}|\\d+(?:\\.\\d+)?%?)`, 'g')
-  return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, match => /^\d/.test(match) ? `<b>${match}</b>` : `<b class="word">${match}</b>`)
+  const pattern = new RegExp(`(${WORDS.join('|')}|\\d+(?:\\.\\d+)?%?)`, 'g')
+  return escapeHtml(value).replace(/\n/g, '<br>').replace(pattern, match => /^\d/.test(match) ? `<b>${match}</b>` : `<b class="word" style="color:${WORD_COLORS[match]}">${match}</b>`)
 }
 
 export function placeholderGroup(value) {
@@ -215,7 +220,7 @@ section{margin-top:14px;padding:20px;border:1px solid rgba(15,23,42,.08);border-
 section h3{display:flex;align-items:center;gap:10px;margin-bottom:16px;color:var(--ink);font-size:32px}
 section h3::before{content:\"\";width:6px;height:22px;border-radius:6px;background:var(--accent)}
 section p{color:#334155;font-size:26px;line-height:1.7;word-break:break-word}
-section p b{color:var(--accent);font-weight:800}
+section p b{font-weight:800}
 section p b.word{font-weight:800}
 .effects .equip p b,.tile p b,.equip p b,.level small b{display:inline;font-weight:800}
 .levels{display:flex;flex-direction:column;gap:6px}

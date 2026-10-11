@@ -247,10 +247,13 @@ function attrStats(attr) {
 }
 
 function coneGroups(list) {
-  return (list || []).map(level => ({
+  const levels = (list || []).map(level => ({
+    rank: Number(String(level.name_ || '').match(/\d+/)?.[0] || 0),
     name: textOf(level.name_),
     materials: (level.material || []).map(item => ({ name: textOf(item.name), icon: item.icon || '', amount: item.num || '' })).filter(item => item.name),
   })).filter(group => group.materials.length)
+  const max = Math.max(0, ...levels.map(level => level.rank))
+  return (max ? levels.filter(level => level.rank === max) : levels).map(({ name, materials }) => ({ name, materials }))
 }
 
 function collectGallery(data, portraits, videos) {
