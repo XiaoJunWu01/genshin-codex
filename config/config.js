@@ -8,8 +8,16 @@ const configFile = path.join(__dirname, 'config.json')
 
 export const defaultConfig = {
   backgroundPath: 'resources/background/bg.png',
-  containerOpacity: 0.72,
-  blur: 6,
+  containerOpacity: 0.22,
+  blur: 12,
+  titleColor: '#ffffff',
+  commandColor: '#fff3cf',
+  textColor: '#ffffff',
+  fontFamily: 'Microsoft YaHei',
+}
+
+function colorOf(value, fallback) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -25,7 +33,17 @@ function normalizeConfig(config = {}) {
     backgroundPath: String(config.backgroundPath ?? defaultConfig.backgroundPath).trim(),
     containerOpacity: clampNumber(config.containerOpacity, 0, 1, defaultConfig.containerOpacity),
     blur: clampNumber(config.blur, 0, 30, defaultConfig.blur),
+    titleColor: colorOf(config.titleColor, defaultConfig.titleColor),
+    commandColor: colorOf(config.commandColor, defaultConfig.commandColor),
+    textColor: colorOf(config.textColor, defaultConfig.textColor),
+    fontFamily: String(config.fontFamily || defaultConfig.fontFamily).slice(0, 80),
   }
+}
+
+export function saveWikiConfig(config) {
+  const next = normalizeConfig(config)
+  fs.writeFileSync(configFile, JSON.stringify(next, null, 2))
+  return next
 }
 
 export function getWikiConfig() {

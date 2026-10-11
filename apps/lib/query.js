@@ -18,6 +18,7 @@ export function gamePlugin(spec) {
       super({
         name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
+          { reg: `^[${marks}]图鉴目录(?:\\s*\\S.*)?$`, fnc: 'catalogCommand', priority: 1 },
           { reg: `^[${marks}](?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
@@ -138,6 +139,12 @@ export function gamePlugin(spec) {
         await e.reply(`${game.name}图鉴查询失败，请稍后重试`)
       }
       return true
+    }
+
+    async catalogCommand(e) {
+      const rest = String(e.msg || '').replace(/^[^\s]*图鉴目录\s*/, '').trim()
+      const channel = rest ? await channelOf(this.spec.key, rest.split(/\s+/)[0]) : null
+      return this.catalog(e, channel)
     }
 
     async catalog(e, channel) {

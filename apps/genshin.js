@@ -135,6 +135,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async showHelp(e) {
     const version = pluginVersion()
+    const style = getWikiConfig()
     const bg = getBackgroundImageUrl()
     const groups = e.isMaster ? [
       ['原神 · 角色', [
@@ -212,7 +213,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: '观测枢图鉴',
       body,
       footer: '',
-      extraCss: `body{width:830px;background:#d7e3ef url("${bg}") center/cover no-repeat}.page{width:830px;background:transparent;padding:18px}.container{width:794px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column}.mast{margin:36px 10px 8px;padding:18px;border-radius:18px;background:rgba(255,255,255,.22);backdrop-filter:blur(12px)}.mast h1{color:#fff;font-size:48px;line-height:1;text-shadow:0 4px 14px rgba(15,23,42,.45)}.mast p{margin-top:8px;color:rgba(255,255,255,.92);font-size:16px;text-shadow:0 2px 8px rgba(15,23,42,.45)}.mast b{display:none}section{margin-top:18px;overflow:hidden;border-radius:15px;background:rgba(255,255,255,.22);box-shadow:0 5px 16px rgba(0,0,0,.15);backdrop-filter:blur(12px)}section h2{padding:15px 20px 10px;color:#fff;font-size:18px;text-shadow:0 2px 8px rgba(15,23,42,.45)}.grid{display:grid;grid-template-columns:1fr 1fr 1fr}.cell{min-height:68px;padding:12px 12px 12px 16px;border-top:1px solid rgba(255,255,255,.18);border-right:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08)}.cell i{display:none}.cell b{display:block;color:#fff3cf;font-size:16px;line-height:24px}.cell span{display:block;color:#fff;font-size:13px;line-height:18px}.foot{margin-top:16px;color:#fff;font-size:14px;text-align:center;text-shadow:0 2px 8px rgba(15,23,42,.45)}`,
+      extraCss: `body{width:830px;background:#d7e3ef url("${bg}") center/cover no-repeat;font-family:"${style.fontFamily}","Microsoft YaHei",sans-serif}.page{width:830px;background:transparent;padding:18px}.container{width:794px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column}.mast{margin:36px 10px 8px;padding:18px;border-radius:18px;background:rgba(255,255,255,${style.containerOpacity});backdrop-filter:blur(${style.blur}px)}.mast h1{color:${style.titleColor};font-size:48px;line-height:1}.mast p{margin-top:8px;color:${style.textColor};font-size:16px}.mast b{display:none}section{margin-top:18px;overflow:hidden;border-radius:15px;background:rgba(255,255,255,${style.containerOpacity});box-shadow:0 5px 16px rgba(0,0,0,.15);backdrop-filter:blur(${style.blur}px)}section h2{padding:15px 20px 10px;color:${style.titleColor};font-size:18px}.grid{display:grid;grid-template-columns:1fr 1fr 1fr}.cell{min-height:68px;padding:12px 12px 12px 16px;border-top:1px solid rgba(255,255,255,.18);border-right:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08)}.cell i{display:none}.cell b{display:block;color:${style.commandColor};font-size:16px;line-height:24px}.cell span{display:block;color:${style.textColor};font-size:13px;line-height:18px}.foot{margin-top:16px;color:${style.textColor};font-size:14px;text-align:center}`,
     }), '发送 #图鉴帮助 查看全部指令')
     return true
   }
@@ -608,7 +609,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const matched = String(e.msg || '').match(new RegExp(shortPattern))
     const channel = findWikiChannel(matched?.[3])
     const keyword = String(matched?.[2] || '').trim()
-    if (!channel || !keyword || keyword.length > 12 || keyword.length < 2 || /^(图鉴|观测枢|wiki)$/.test(keyword)) return false
+    if (!channel || !keyword || keyword.length > 12 || keyword.length < 2 || /图鉴|观测枢|wiki/.test(keyword)) return false
     const focus = findWikiFocus(matched?.[1])
     e.msg = focus ? `#g${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
     return focus ? this.queryFocus(e) : this.query(e)
