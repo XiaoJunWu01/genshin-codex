@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { aliasNames, entryPattern, upcomingName } from '../model/alias.js'
+import { aliasNames, upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -90,7 +90,7 @@ export default class WikiPlugin extends plugin {
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
-        ...(entryPattern('gs') ? [{ reg: `^#(${entryPattern('gs')})$`, fnc: 'queryBare', priority: 1 }] : []),
+        { reg: '^#[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
       ],
     })
   }
@@ -649,9 +649,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
-    const official = aliasNames('gs', keyword)[0] || keyword
-    if (!keyword) return false
-    return this.openExact(e, official)
+    const names = aliasNames('gs', keyword)
+    if (!names.length) return false
+    return this.openExact(e, names[0])
   }
 
   async queryIndex(e) {

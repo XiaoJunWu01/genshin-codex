@@ -3,7 +3,7 @@ import {
   ENTRY_CHANNEL, channelOf, channelPattern, gameOf, getGameEntry, listGame,
   mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../../model/games.js'
-import { entryPattern, aliasNames, upcomingName } from '../../model/alias.js'
+import { aliasKinds, aliasNames, upcomingName } from '../../model/alias.js'
 import { entryCss, resultCss, themeOf } from './theme.js'
 import { GAME_CSS, boardHtml, entryHtml, pageHtml, renderHtml, resultHtml } from './page.js'
 
@@ -20,7 +20,7 @@ export function gamePlugin(spec) {
           { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          ...(entryPattern(spec.key) ? [{ reg: `^#(${entryPattern(spec.key)})$`, fnc: 'queryBare', priority: 1 }] : []),
+          { reg: '^#[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
           { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
           { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
@@ -60,9 +60,9 @@ export function gamePlugin(spec) {
 
     async queryBare(e) {
       const keyword = String(e.msg || '').replace(/^#/, '').trim()
-      const official = aliasNames(this.spec.key, keyword)[0] || keyword
-      if (!official) return false
-      e.msg = `${this.spec.letter}${official}`
+      const names = aliasNames(this.spec.key, keyword)
+      if (!names.length) return false
+      e.msg = `${this.spec.letter}${names[0]}`
       return this.query(e)
     }
 
@@ -88,10 +88,31 @@ export function gamePlugin(spec) {
         const lead = words[0] || ''
         const channel = words.length > 1 ? await channelOf(this.spec.key, lead) : null
         const focus = words.length > 1 ? this.focusOf(lead) : null
-        const keyword = (channel || focus) ? words.slice(1).join('') : words.join('')
+        let keyword = (channel || focus) ? words.slice(1).join('') : words.join('')
+        const kinds = aliasKinds(this.spec.key, keyword)
+        const official = aliasNames(this.spec.key, keyword)[0] || ''
+        if (!channel && !focus && kinds.includes('weapon') && /专武|专属音擎|专属光锥/.test(keyword)) {
+          const weaponChannel = (await channelsOf(this.spec.key)).find(item => /音擎|光锥/.test(item.name))
+          if (weaponChannel && official) {
+            keyword = official
+            return this.openResults(e, await searchGame(this.spec.key, official, { channelId: weaponChannel.id, limit: 8 }), official, weaponChannel, null)
+          }
+        }
+        if (!channel && !focus && official && kinds.length === 1) keyword = official
         if (!keyword) return this.catalog(e, channel)
         if (page && /影音|视频|pv|PV/.test(rest)) return this.openVideoPage(e, keyword, page)
         const results = await searchGame(this.spec.key, keyword, { channelId: channel?.id || 0, limit: 8 })
+        return this.openResults(e, results, keyword, channel, focus)
+      } catch (err) {
+        logger.error(`[${game.name}图鉴]`, err)
+        await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+      }
+      return true
+    }
+
+    async openResults(e, results, keyword, channel, focus) {
+      const game = gameOf(this.spec.key)
+      try {
         const exact = results.filter(item => item.score >= 100)
         const matched = channel || focus ? results : (exact.length ? exact : results)
         if (!matched.length) {
@@ -105,7 +126,7 @@ export function gamePlugin(spec) {
         this.sessions.set(this.sessionKey(e), { results: shown, focus: focus?.id || '', time: Date.now() })
         if (direct || new Set(shown.map(item => item.name)).size === 1) return this.show(e, shown[0], focus)
         await this.replyImage(e, pageHtml({
-          title: `「${keyword}」`, subtitle: `${game.name}有多个结果`, body: resultHtml(matched),
+          title: `「${keyword}」`, subtitle: `${game.name}有多个结果`, body: resultHtml(shown),
           footer: `发送 ${this.spec.letter}1 打开对应条目`, extraCss: resultCss,
         }), matched.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
       } catch (err) {

@@ -137,6 +137,10 @@ export function aliasNames(game, keyword) {
   return (indexOf(game).get(key) || []).map(item => item.name)
 }
 
+export function aliasKinds(game, keyword) {
+  return [...new Set((indexOf(game).get(normalize(keyword)) || []).map(item => item.kind))]
+}
+
 export function entryPattern(game, kinds = ['character', 'weapon', 'artifact']) {
   const allowed = new Set(kinds)
   const names = new Set()
