@@ -119,11 +119,12 @@ export function aliasNames(game, keyword) {
   return (indexOf(game).get(key) || []).map(item => item.name)
 }
 
-export function characterPattern(game) {
+export function entryPattern(game, kinds = ['character', 'weapon', 'artifact']) {
+  const allowed = new Set(kinds)
   const names = new Set()
   for (const items of indexOf(game).values()) {
     for (const item of items) {
-      if (item.kind === 'character') names.add(item.name)
+      if (allowed.has(item.kind)) names.add(item.name)
     }
   }
   return [...names].sort((a, b) => b.length - a.length).join('|')

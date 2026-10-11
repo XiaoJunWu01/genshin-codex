@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { characterPattern, upcomingName } from '../model/alias.js'
+import { entryPattern, upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -90,7 +90,7 @@ export default class WikiPlugin extends plugin {
         { reg: shortPattern, fnc: 'queryShort', priority: 74 },
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
-        ...(characterPattern('gs') ? [{ reg: `^#(${characterPattern('gs')})$`, fnc: 'queryBare', priority: 1 }] : []),
+        ...(entryPattern('gs') ? [{ reg: `^#(${entryPattern('gs')})$`, fnc: 'queryBare', priority: 1 }] : []),
       ],
     })
   }
