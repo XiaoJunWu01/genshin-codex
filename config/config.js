@@ -8,6 +8,9 @@ const configFile = path.join(__dirname, 'config.json')
 
 export const defaultConfig = {
   backgroundPath: 'resources/background/bg.png',
+  theme: 'miao',
+  columns: 3,
+  glass: true,
   containerOpacity: 0.22,
   blur: 12,
   titleColor: '#ffffff',
@@ -31,6 +34,9 @@ function normalizeConfig(config = {}) {
     ...defaultConfig,
     ...config,
     backgroundPath: String(config.backgroundPath ?? defaultConfig.backgroundPath).trim(),
+    theme: ['miao', 'light', 'glass'].includes(config.theme) ? config.theme : defaultConfig.theme,
+    columns: [2, 3, 4].includes(Number(config.columns)) ? Number(config.columns) : defaultConfig.columns,
+    glass: config.glass !== false,
     containerOpacity: clampNumber(config.containerOpacity, 0, 1, defaultConfig.containerOpacity),
     blur: clampNumber(config.blur, 0, 30, defaultConfig.blur),
     titleColor: colorOf(config.titleColor, defaultConfig.titleColor),
