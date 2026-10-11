@@ -1,6 +1,6 @@
 import plugin from '../../../../lib/plugins/plugin.js'
 import {
-  ENTRY_CHANNEL, channelOf, channelPattern, gameOf, getGameEntry, listGame,
+  ENTRY_CHANNEL, channelOf, channelPattern, channelsOf, gameOf, getGameEntry, listGame,
   mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../../model/games.js'
 import { aliasKinds, aliasNames, upcomingName } from '../../model/alias.js'

@@ -47,7 +47,7 @@ const sources = {
 const cache = new Map()
 
 function normalize(value) {
-  return String(value || '').replace(/[【】\[\]()（）·•・\s]/g, '').toLowerCase()
+  return String(value || '').replace(/尔/g, '儿').replace(/[【】\[\]()（）·•・\s]/g, '').toLowerCase()
 }
 
 function splitAliases(value) {
