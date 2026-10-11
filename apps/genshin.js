@@ -556,6 +556,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const channel = findWikiChannel(matched?.[3])
     const keyword = String(matched?.[2] || '').trim()
     if (!channel || !keyword || keyword.length > 12 || keyword.length < 2 || /图鉴|观测枢|wiki/.test(keyword)) return false
+    // 快捷分类只处理图鉴里确实存在的精确条目；未知文本必须交给其他插件。
+    const results = await searchWiki(keyword, { channelId: channel.id, limit: 8 }).catch(() => [])
+    if (!results.some(item => normalizeWikiName(item.name) === normalizeWikiName(keyword))) return false
     const focus = findWikiFocus(matched?.[1])
     e.msg = focus ? `#${focus.name} ${keyword}` : `#图鉴 ${channel.name} ${keyword}`
     return focus ? this.queryFocus(e) : this.query(e)
@@ -566,6 +569,8 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const focus = findWikiFocus(matched?.[2])
     const keyword = matched?.[1] || ''
     if (!focus || !keyword || /^(图鉴|观测枢|wiki|角色|武器)$/.test(keyword)) return false
+    const results = await searchWiki(keyword, { limit: 8 }).catch(() => [])
+    if (!results.some(item => normalizeWikiName(item.name) === normalizeWikiName(keyword) && /角色/.test(item.channelName || ''))) return false
     e.msg = `#${focus.name} ${keyword}`
     return this.queryFocus(e)
   }
@@ -576,8 +581,16 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     if (findWikiFocus(keyword)) return false
     try {
       if (/专武|专属武器/.test(keyword)) return this.openSignature(e, keyword)
-      const found = await this.openExact(e, keyword)
-      const upcoming = !found ? upcomingName('gs', keyword) : ''
+      const aliases = aliasNames('gs', keyword)
+      const results = aliases.length ? await searchWiki(aliases[0], { limit: 8 }) : await searchWiki(keyword, { limit: 8 })
+      const found = results.some(item => item.score >= 100)
+      if (!aliases.length && !found) {
+        const upcoming = upcomingName('gs', keyword)
+        if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
+        return false
+      }
+      const opened = await this.openExact(e, aliases[0] || keyword)
+      const upcoming = !opened ? upcomingName('gs', keyword) : ''
       if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
     } catch (err) {
       logger.error('[观测枢图鉴]', err)

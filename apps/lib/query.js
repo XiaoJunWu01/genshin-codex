@@ -122,8 +122,11 @@ export function gamePlugin(spec) {
         const matched = channel || focus ? results : (exact.length ? exact : results)
         if (!matched.length) {
           const upcoming = !channel && !focus ? upcomingName(this.spec.key === 'sr' ? 'sr' : 'zzz', keyword) : ''
-          if (upcoming) await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
-          return true
+          if (upcoming) {
+            await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
+            return true
+          }
+          return false
         }
         const preferred = !channel && !focus ? exact.filter(item => ENTRY_CHANNEL.test(item.channelName || '')) : []
         const direct = preferred.length === 1 ? preferred[0] : (!channel && !focus && exact.length === 1 ? exact[0] : null)
