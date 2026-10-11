@@ -689,7 +689,12 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async queryAlias(e) {
     const matched = String(e.msg || '').match(new RegExp(`^${lead}(${channelPattern})\\s*(\\S+)$`))
     if (!matched) return false
-    e.msg = `#图鉴 ${matched[1]} ${matched[2]}`
+    const keyword = matched[2]
+    const channel = findWikiChannel(matched[1])
+    if (!channel || !keyword) return false
+    const results = await searchWiki(keyword, { channelId: channel.id, limit: 8 }).catch(() => [])
+    if (!results.some(item => normalizeWikiName(item.name) === normalizeWikiName(keyword))) return false
+    e.msg = `#图鉴 ${matched[1]} ${keyword}`
     return this.query(e)
   }
 
