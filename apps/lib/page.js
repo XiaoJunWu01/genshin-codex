@@ -139,8 +139,7 @@ export function entryHtml(entry, focus, { factsOf, layoutOf, overview, links }) 
   const factRows = factsOf(entry) || []
   const facts = factRows.filter(([, value]) => value)
     .map(([label, value]) => `<span><em>${label}</em><b>${escapeHtml(value)}</b></span>`).join('')
-  const used = new Set(factRows.map(([, value]) => value))
-  const tags = (entry.tags || []).filter(tag => !used.has(tag)).map(tag => `<span>${escapeHtml(tag)}</span>`).join('')
+  const tags = ''
   const source = focus?.id === 'detail'
     ? entry.all || entry.sections || []
     : (focus?.id === 'profile'
@@ -168,5 +167,5 @@ export function entryHtml(entry, focus, { factsOf, layoutOf, overview, links }) 
   const moreLinks = links?.length ? `<div class="more"><em>分开查看</em>${links.map(name => `<span>${escapeHtml(name)}</span>`).join('')}</div>` : ''
   const title = focus && focus.id !== 'detail' ? `${entry.name} · ${focus.name}` : entry.name
   const splash = focus?.id === 'detail' || !entry.theme?.portrait ? '' : `<img class="splash" src="${escapeHtml(entry.theme.portrait)}" alt="">`
-  return `<div class="hero${splash ? ' art' : ''}">${splash || icon}<div><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}<div class="tags">${tags}</div></div></div>${sections}${moreLinks}`
+  return `<div class="hero${splash ? ' art' : ''}">${splash || icon}<div><h2>${escapeHtml(title)}</h2>${facts ? `<div class="facts">${facts}</div>` : ''}</div></div>${sections}${moreLinks}`
 }

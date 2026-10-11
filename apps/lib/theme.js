@@ -201,9 +201,9 @@ export const entryCss = `
 .cover{width:168px;height:168px;object-fit:contain;border-radius:32px;background:radial-gradient(circle at 50% 42%,#fff,var(--soft) 72%);border:1px solid rgba(15,23,42,.06);flex-shrink:0}
 .hero h2{color:var(--ink);font-size:52px;line-height:1.15}
 .facts{display:flex;flex-wrap:wrap;gap:12px;margin-top:16px}
-.facts span{min-width:120px;padding:12px 18px;border-radius:16px;background:#fff;border:1px solid rgba(15,23,42,.06);border-top:5px solid var(--accent)}
+.facts span{min-width:120px;padding:12px 18px;border-radius:16px;background:#fff;border:1px solid rgba(15,23,42,.08)}
 .facts em{display:block;color:#64748b;font-style:normal;font-size:20px}
-.facts b{color:var(--accent);font-size:30px}
+.facts b{color:#1e293b;font-size:30px}
 .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .tags span{padding:6px 16px;border-radius:999px;background:var(--accent);color:#fff;font-size:22px;font-weight:700}
 .profile{display:grid;grid-template-columns:1fr 1fr;grid-auto-flow:column;grid-template-rows:repeat(3,auto);margin-top:4px}

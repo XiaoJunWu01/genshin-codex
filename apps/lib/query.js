@@ -11,20 +11,22 @@ const sessions = new Map()
 
 export function gamePlugin(spec) {
   const wordPattern = spec.words.join('|')
+  const mark = spec.mark || '#'
+  const marks = [spec.letter, mark].filter((item, index, list) => list.indexOf(item) === index).join('')
   return class extends plugin {
     constructor() {
       super({
         name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
-          { reg: `^#?${spec.letter}(?![a-z#])(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: '^#[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
-          { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
-          { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
-          { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
-          { reg: `^(?:#|g)?(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
+          { reg: `^[${marks}](?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          { reg: `^\\${mark}[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
+          { reg: `^[${marks}](?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
+          { reg: `^[${marks}]\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
+          { reg: `^(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
+          { reg: `^(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
         ],
       })
       this.spec = spec
@@ -33,10 +35,11 @@ export function gamePlugin(spec) {
 
     commandOf(text) {
       const source = String(text || '').trim()
-      const lettered = source.match(new RegExp(`^#?(${this.spec.letter})(?![a-z#])\\s*(.*)$`, 'i'))
-      if (lettered) return { rest: lettered[2].trim() }
-      const word = source.match(new RegExp(`^(?:#|g)?(${this.spec.words.join('|')})\\s*(.*)$`))
-      return word ? { rest: word[2].trim() } : null
+      const mark = this.spec.mark || '#'
+      const lettered = source.match(new RegExp(`^[${this.spec.letter}${mark}](?![a-z#])\\s*(.*)$`, 'i'))
+      if (lettered) return { rest: lettered[1].trim() }
+      const word = source.match(new RegExp(`^(?:${this.spec.words.join('|')})\\s*(.*)$`))
+      return word ? { rest: word[1].trim() } : null
     }
 
     focusOf(keyword) {
@@ -59,10 +62,10 @@ export function gamePlugin(spec) {
     }
 
     async queryBare(e) {
-      const keyword = String(e.msg || '').replace(/^#/, '').trim()
+      const keyword = String(e.msg || '').replace(/^[^\s]/, '').trim()
       const names = aliasNames(this.spec.key, keyword)
       if (!names.length) return false
-      e.msg = `${this.spec.letter}${names[0]}`
+      e.msg = `${this.spec.letter}${/专武/.test(keyword) ? keyword : names[0]}`
       return this.query(e)
     }
 
@@ -91,12 +94,13 @@ export function gamePlugin(spec) {
         let keyword = (channel || focus) ? words.slice(1).join('') : words.join('')
         const kinds = aliasKinds(this.spec.key, keyword)
         const official = aliasNames(this.spec.key, keyword)[0] || ''
-        if (!channel && !focus && kinds.includes('weapon') && /专武|专属音擎|专属光锥/.test(keyword)) {
-          const weaponChannel = (await channelsOf(this.spec.key)).find(item => /音擎|光锥/.test(item.name))
-          if (weaponChannel && official) {
-            keyword = official
-            return this.openResults(e, await searchGame(this.spec.key, official, { channelId: weaponChannel.id, limit: 8 }), official, weaponChannel, null)
+        if (!channel && !focus && /专武|专属音擎|专属光锥/.test(keyword)) {
+          const weaponChannel = (await channelsOf(this.spec.key)).find(item => /音擎|光锥|武器/.test(item.name))
+          if (!kinds.includes('weapon') || !weaponChannel || !official) {
+            await e.reply(`「${keyword.replace(/专武|专属音擎|专属光锥/g, '')}」暂无专属${weaponChannel?.name || '武器'}，可以查看 ${this.spec.letter}推荐 ${keyword.replace(/专武|专属音擎|专属光锥/g, '')}`)
+            return true
           }
+          return this.openResults(e, await searchGame(this.spec.key, official, { channelId: weaponChannel.id, limit: 8 }), official, weaponChannel, null)
         }
         if (!channel && !focus && official && kinds.length === 1) keyword = official
         if (!keyword) return this.catalog(e, channel)

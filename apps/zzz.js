@@ -17,6 +17,7 @@ const focus = [
 export default gamePlugin({
   key: 'zzz',
   letter: 'z',
+  mark: '%',
   words: ['绝区零', '绝区'],
   name: '绝区零图鉴',
   dsc: '绝区零图鉴',

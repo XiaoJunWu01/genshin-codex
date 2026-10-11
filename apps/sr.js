@@ -18,6 +18,7 @@ const focus = [
 export default gamePlugin({
   key: 'sr',
   letter: 's',
+  mark: '*',
   words: ['星铁', '星穹铁道', '崩铁'],
   name: '星穹铁道图鉴',
   dsc: '崩坏：星穹铁道图鉴',
