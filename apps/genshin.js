@@ -136,72 +136,63 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   async showHelp(e) {
     const version = pluginVersion()
     const bg = getBackgroundImageUrl()
-    const groups = [
-      ['常用', [
-        ['g角色 胡桃', '角色简介、突破和推荐', '角'],
-        ['g武器 狼的末路', '武器效果和突破材料', '武'],
-        ['g圣遗物 饰金', '套装效果和推荐角色', '圣'],
-        ['s角色 流萤', '角色简介、晋阶和推荐', 's'],
-        ['s光锥 记一位星神的陨落', '光锥效果和晋阶材料', '锥'],
-        ['s遗器 坠星启航地', '遗器套装效果', '遗'],
-        ['z角色 妮可', '代理人简介和突破', 'z'],
-        ['z音擎 聚宝箱', '音擎效果和突破材料', '擎'],
-        ['z驱动盘 呼啸沙龙', '驱动盘套装效果', '盘'],
+    const groups = e.isMaster ? [
+      ['原神 · 角色', [
+        ['#胡桃', '完整角色名直接出图'], ['g胡桃', '同上，g 前缀'], ['g立绘 胡桃', '全身立绘原图'],
+        ['g动作 胡桃', '待机和技能动图'], ['g天赋 胡桃', '天赋全文和倍率'], ['g命座 胡桃', '六条命之座'],
+        ['g突破 胡桃', '突破材料和满级合计'], ['g故事 胡桃', '角色故事和配音'], ['g推荐 胡桃', '武器和圣遗物推荐'],
+        ['g资料 胡桃', '生日、称号和所属'],
       ]],
-      ...(e.isMaster ? [['原神角色', [
-        ['g胡桃', '名字完全一致时直接出图', '查'],
-        ['g立绘 胡桃', '全身立绘原图', '绘'],
-        ['g动作 胡桃', '待机和技能动图', '动'],
-        ['g天赋 胡桃', '天赋全文和伤害倍率', '天'],
-        ['g命座 胡桃', '六条命之座', '命'],
-        ['g突破 胡桃', '突破材料和满级合计', '突'],
-        ['g故事 胡桃', '角色故事和配音', '故'],
-        ['g推荐 胡桃', '武器和圣遗物推荐', '荐'],
-        ['g资料 胡桃', '生日、称号和所属', '档'],
+      ['原神 · 养成与图鉴', [
+        ['g角色 胡桃', '角色分类查询'], ['g武器 狼的末路', '武器效果和材料'], ['#赤沙之杖', '完整武器名直接出图'],
+        ['g圣遗物 饰金', '套装效果和推荐'], ['#饰金之梦', '完整圣遗物名直接出图'], ['g图鉴 银釭', '搜索全部词条'],
+        ['g图鉴目录 角色 火 五星', '分类、元素和星级筛选'], ['g图鉴日历', '未来材料和生日'], ['g图鉴今天', '只看今天'],
+        ['g影音 薇斯纳', '角色视频和过场动画'], ['g角色视频', '角色视频分组'], ['g过场动画', '过场动画分组'],
       ]],
-      ['原神其他', [
-        ['#敌人 丘丘人', '敌人资料', '敌'],
-        ['#食物 甜甜花酿鸡', '食谱和食用效果', '食'],
-        ['#材料 霓裳花', '材料来源和用途', '材'],
-        ['#动物 虹晶星花鱼', '动物和生物', '兽'],
-        ['#成就 无束的残月', '成就达成条件', '成'],
-        ['#任务 至冬宫的来信', '任务资料', '任'],
-        ['#委托 兽内不和', '每日委托', '委'],
-        ['#秘境 荒坠的圣迹', '秘境和洞天', '境'],
-        ['#深渊 深境螺旋第8层', '深渊、剧诗和危战', '渊'],
-        ['#行动牌 七循之理', '七圣召唤卡牌', '牌'],
-        ['#名片 原神·印象', '名片资料和原图', '片'],
-        ['#头像 锋锐', '头像资料', '像'],
-        ['#NPC 叶尔莫莱', 'NPC 和商店', '人'],
-        ['g图鉴 银釭', '按关键字搜索全部词条', '搜'],
-        ['g影音 薇斯纳', '先看封面，再选一条播放', '影'],
-        ['g图鉴目录 角色 火 五星', '分类、筛选和日历', '目'],
+      ['原神 · 分类查询', [
+        ['#敌人 丘丘人', '敌人资料'], ['#食物 甜甜花酿鸡', '食谱和效果'], ['#材料 霓裳花', '材料来源和用途'],
+        ['#动物 虹晶星花鱼', '动物和生物'], ['#成就 无束的残月', '成就条件'], ['#任务 至冬宫的来信', '任务资料'],
+        ['#委托 兽内不和', '每日委托'], ['#秘境 荒坠的圣迹', '秘境和洞天'], ['#深渊 深境螺旋第8层', '深渊、剧诗和危战'],
+        ['#行动牌 七循之理', '七圣召唤卡牌'], ['#名片 原神·印象', '名片资料和原图'], ['#头像 锋锐', '头像资料'],
+        ['#NPC 叶尔莫莱', 'NPC 和商店'], ['#书籍 提瓦特游览指南', '书籍资料'], ['#活动 海灯节', '活动资料'],
       ]],
-      ['星穹铁道扩展', [
-        ['s立绘 流萤', '角色立绘', '绘'],
-        ['s行迹 流萤', '行迹全文', '迹'],
-        ['s星魂 流萤', '六条星魂', '魂'],
-        ['s晋阶 流萤', '晋阶材料和满级属性', '阶'],
-        ['s推荐 流萤', '光锥和遗器推荐', '荐'],
-        ['s故事 流萤', '角色故事', '故'],
-        ['s地图 流萤', '地图等其他同名内容', '图'],
-        ['s影音 流萤', '先选一条再播放', '影'],
-        ['s表情包', '米游社表情包分组', '表'],
+      ['星穹铁道 · 角色与养成', [
+        ['s流萤', '角色简介和晋阶'], ['#流萤', '完整角色名直接出图'], ['s角色 流萤', '角色分类查询'],
+        ['s立绘 流萤', '角色立绘'], ['s行迹 流萤', '行迹全文和倍率'], ['s星魂 流萤', '六条星魂'],
+        ['s晋阶 流萤', '晋阶材料和满级属性'], ['s推荐 流萤', '光锥和遗器推荐'], ['s故事 流萤', '角色故事'],
+        ['s资料 流萤', '角色资料'], ['s配音 流萤', '角色配音'], ['s流萤专武', '别名对应的专属光锥'],
       ]],
-      ['绝区零扩展', [
-        ['z立绘 妮可', '代理人立绘', '绘'],
-        ['z技能 妮可', '技能图标和全文', '技'],
-        ['z影画 妮可', '代理人影画', '画'],
-        ['z突破 妮可', '突破材料和信赖奖励', '突'],
-        ['z故事 妮可', '代理人故事', '故'],
-        ['z地图 妮可', '地图等其他同名内容', '图'],
-        ['z影音 妮可', '先选一条再播放', '影'],
-        ['z壁纸', '节日和版本壁纸', '纸'],
+      ['星穹铁道 · 其他', [
+        ['s光锥 记一位星神的陨落', '光锥效果和晋阶'], ['s遗器 坠星启航地', '遗器套装效果'], ['s敌人 银鬃铁卫', '敌人资料'],
+        ['s材料 信用点', '养成材料'], ['s地图 流萤', '地图等其他同名内容'], ['s影音 流萤', '角色视频'],
+        ['s角色视频', '角色视频分组'], ['s其他视频', '其他视频分组'], ['s表情包', '表情包分组'],
+        ['s表情包 第1组', '发送对应图片'], ['s帮助', '查看星铁指令'],
+      ]],
+      ['绝区零 · 角色与养成', [
+        ['z妮可', '代理人简介和突破'], ['#妮可', '完整角色名直接出图'], ['z角色 妮可', '角色分类查询'],
+        ['z立绘 妮可', '代理人立绘'], ['z技能 妮可', '技能图标和全文'], ['z影画 妮可', '代理人影画'],
+        ['z突破 妮可', '突破材料和信赖奖励'], ['z推荐 妮可', '音擎和驱动盘推荐'], ['z故事 妮可', '代理人故事'],
+        ['z资料 妮可', '代理人资料'], ['z配音 妮可', '代理人配音'], ['z妮可专武', '别名对应的专属音擎'],
+      ]],
+      ['绝区零 · 其他', [
+        ['z音擎 聚宝箱', '音擎效果和满级材料'], ['z驱动盘 呼啸沙龙', '驱动盘套装效果'], ['z敌人 歹徒', '敌人资料'],
+        ['z材料 丁尼', '养成材料'], ['z地图 妮可', '地图等其他同名内容'], ['z影音 妮可', '角色视频'],
+        ['z角色视频', '角色视频分组'], ['z其他视频', '其他视频分组'], ['z壁纸', '节日和版本壁纸'],
+        ['z壁纸 中秋节', '发送对应壁纸'], ['z帮助', '查看绝区零指令'],
       ]],
       ['主人设置', [
-        ['#图鉴更新', '拉取插件更新', '新'],
+        ['#图鉴更新', '拉取插件更新'], ['#图鉴帮助', '查看全部指令'],
       ]],
-    ] : []),
+    ] : [
+      ['原神', [
+        ['g角色 胡桃', '角色简介、突破和推荐'], ['g武器 狼的末路', '武器效果和突破材料'], ['g圣遗物 饰金', '套装效果和推荐角色'],
+      ]],
+      ['星穹铁道', [
+        ['s角色 流萤', '角色简介、晋阶和推荐'], ['s光锥 记一位星神的陨落', '光锥效果和晋阶材料'], ['s遗器 坠星启航地', '遗器套装效果'],
+      ]],
+      ['绝区零', [
+        ['z角色 妮可', '代理人简介和突破'], ['z音擎 聚宝箱', '音擎效果和突破材料'], ['z驱动盘 呼啸沙龙', '驱动盘套装效果'],
+      ]],
     ]
     const body = `<div class="help">
       <div class="mast">
@@ -221,7 +212,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: '观测枢图鉴',
       body,
       footer: '',
-      extraCss: `body{background:#d7e3ef url("${bg}") center/cover no-repeat}.page{background:transparent;padding:28px}.container{width:900px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column;gap:14px}.mast{display:flex;align-items:flex-end;justify-content:space-between;padding:8px 8px 2px}.mast h1{color:#fff;font-size:46px;line-height:1;letter-spacing:.04em;text-shadow:0 6px 18px rgba(15,23,42,.45)}.mast p{margin-top:8px;color:rgba(255,255,255,.92);font-size:15px;letter-spacing:.08em;text-shadow:0 2px 8px rgba(15,23,42,.45)}.mast b{padding:7px 12px;border:1px solid rgba(255,255,255,.5);border-radius:12px;background:rgba(255,255,255,.16);color:#fff;font-size:14px;letter-spacing:.08em;backdrop-filter:blur(8px)}section{padding:16px;border:1px solid rgba(255,255,255,.34);border-radius:18px;background:rgba(17,24,39,.30);box-shadow:0 10px 28px rgba(15,23,42,.12);backdrop-filter:blur(8px)}section h2{margin-bottom:10px;color:#fff;font-size:16px;text-shadow:0 2px 8px rgba(15,23,42,.4)}section .grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}.cell{display:flex;align-items:flex-start;gap:8px;min-height:62px;padding:9px 10px;border-radius:12px;background:rgba(255,255,255,.08)}.cell i{display:flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:8px;background:rgba(255,255,255,.2);color:#fff;font-style:normal;font-size:13px;flex-shrink:0}.cell b{display:block;color:#fff;font-size:14px;line-height:1.35;text-shadow:0 1px 4px rgba(15,23,42,.4)}.cell span{display:block;margin-top:3px;color:rgba(241,245,249,.86);font-size:12px;line-height:1.4}.foot{color:rgba(255,255,255,.92);font-size:13px;text-align:center;text-shadow:0 2px 8px rgba(15,23,42,.45)}`,
+      extraCss: `body{width:830px;background:#f3efe7 url("${bg}") center/cover no-repeat}.page{width:830px;background:rgba(255,255,255,.78);padding:18px}.container{width:794px;padding:0;background:transparent;box-shadow:none}.header,.footer{display:none}.help{display:flex;flex-direction:column}.mast{margin:36px 10px 8px}.mast h1{color:#2f3542;font-size:48px;line-height:1}.mast p{margin-top:8px;color:#6b6258;font-size:16px}.mast b{display:none}section{margin-top:18px;overflow:hidden;border-radius:15px;background:rgba(255,255,255,.9);box-shadow:0 5px 10px rgba(0,0,0,.15)}section h2{padding:15px 20px 10px;color:#2f3542;font-size:18px}.grid{display:grid;grid-template-columns:1fr 1fr 1fr}.cell{min-height:68px;padding:12px 12px 12px 16px;border-top:1px solid rgba(136,136,136,.25);border-right:1px solid rgba(136,136,136,.25);background:rgba(34,41,51,.48)}.cell i{display:none}.cell b{display:block;color:#d3bc8e;font-size:16px;line-height:24px}.cell span{display:block;color:#fff;font-size:13px;line-height:18px}.foot{margin-top:16px;color:#504c49;font-size:14px;text-align:center}`,
     }), '发送 #图鉴帮助 查看全部指令')
     return true
   }
