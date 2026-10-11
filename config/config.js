@@ -27,7 +27,7 @@ function normalizeHelp(value) {
     group: String(group?.group || '未命名').slice(0, 20),
     common: group?.common === true,
     list: (Array.isArray(group?.list) ? group.list : []).map(item => ({
-      title: String(item?.title || '').slice(0, 40),
+      title: String(item?.title || '').replace(/^(?:g)(?=\S)/, '#').replace(/^(?:s)(?=\S)/, '*').replace(/^(?:z)(?=\S)/, '%').slice(0, 40),
       desc: String(item?.desc || '').slice(0, 40),
     })).filter(item => item.title),
   })).filter(group => group.list.length)

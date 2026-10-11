@@ -18,7 +18,7 @@ export function gamePlugin(spec) {
       super({
         name: spec.name, dsc: spec.dsc, event: 'message', priority: 5,
         rule: [
-          { reg: `^[${marks}](?:图鉴)?(?:目录|列表|分类)(?:\\s*\\S.*)?$`, fnc: 'catalogCommand', priority: 0 },
+          { reg: `^[${marks}](?:(?:图鉴)?(?:目录|列表|分类)|(?:角色|人物|代理人|光锥|遗器|音擎|驱动盘)目录)(?:\\s*\\S.*)?$`, fnc: 'catalogCommand', priority: 0 },
           { reg: `^[${marks}](?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
@@ -75,7 +75,7 @@ export function gamePlugin(spec) {
       if (!command || (command.rest && command.rest !== '帮助')) return false
       const game = gameOf(this.spec.key)
       const lines = e.isMaster ? this.spec.help : (this.spec.common || this.spec.help.slice(0, 4))
-      await e.reply([`${game.name}图鉴（${this.spec.letter} 前缀）`, ...lines].join('\n'))
+      await e.reply([`${game.name}图鉴（主符号 ${this.spec.mark || '#'}；字母别名 ${this.spec.letter}）`, ...lines].join('\n'))
       return true
     }
 
@@ -132,7 +132,7 @@ export function gamePlugin(spec) {
         if (direct || new Set(shown.map(item => item.name)).size === 1) return this.show(e, shown[0], focus)
         await this.replyImage(e, pageHtml({
           title: `「${keyword}」`, subtitle: `${game.name}有多个结果`, body: resultHtml(shown),
-          footer: `发送 ${this.spec.letter}1 打开对应条目`, extraCss: resultCss,
+          footer: `发送 ${this.spec.mark || '#'}1 打开对应条目 · 字母别名：${this.spec.letter}1`, extraCss: resultCss,
         }), matched.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
       } catch (err) {
         logger.error(`[${game.name}图鉴]`, err)
@@ -142,7 +142,7 @@ export function gamePlugin(spec) {
     }
 
     async catalogCommand(e) {
-      const rest = String(e.msg || '').replace(/^[^\s]*(?:图鉴)?(?:目录|列表|分类)\s*/, '').trim()
+      const rest = String(e.msg || '').replace(/^[^\s]*(?:(?:图鉴)?(?:目录|列表|分类)|(?:角色|人物|代理人|光锥|遗器|音擎|驱动盘)目录)\s*/, '').trim() || String(e.msg || '').match(/^[^\s]+(?=目录)/)?.[0]?.replace(/目录$/, '') || ''
       const channel = rest ? await channelOf(this.spec.key, rest.split(/\s+/)[0]) : null
       return this.catalog(e, channel)
     }
@@ -337,7 +337,7 @@ export function gamePlugin(spec) {
         title: `「${keyword}」的视频`,
         subtitle: `${game.name} · 第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,
         body: boardHtml(cards, { columns: 1 }),
-        footer: `发送 ${this.spec.letter}${start + 1} 播放这一条${next}`,
+        footer: `发送 ${this.spec.mark || '#'}${start + 1} 播放这一条${next} · 字母别名：${this.spec.letter}${start + 1}`,
         extraCss: GAME_CSS,
       }), items.slice(start, start + size).map((item, index) => `${start + index + 1}. ${item.name}`).join('\n'))
       return true

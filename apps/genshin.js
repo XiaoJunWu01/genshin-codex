@@ -153,7 +153,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         <h2>${title}</h2>
         <div class="grid" style="grid-template-columns:repeat(${style.columns},1fr)">${items.map(([cmd, desc, mark]) => `<div class="cell"><i>${mark}</i><div><b>${escapeHtml(cmd)}</b><span>${escapeHtml(desc)}</span></div></div>`).join('')}</div>
       </section>`).join('')}
-      <div class="foot">普通帮助只显示三个游戏的常用查询。主人发送 #图鉴帮助 可查看全部有效指令</div>
+      <div class="foot">主符号：原神 #　星穹铁道 *　绝区零 %　｜字母别名：原神 g　星铁 s　绝区零 z</div>
     </div>`
     await this.replyImage(e, this.wrapHtml({
       title: '观测枢图鉴',
@@ -397,7 +397,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return {
       totalPage,
       body: `<div class="results">${rows}</div>`,
-      footer: `发送 g序号 或 #序号 查看，例如 g${start + 1}、#${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`, 
+      footer: `发送 #序号 查看，例如 #${start + 1}${page < totalPage ? `<br>下一页：#图鉴 ${keyword} ${page + 1}` : ''}`, 
     }
   }
 
@@ -445,7 +445,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       if (!keyword && !kind) {
         const items = await mediaGroups('ys')
         const count = name => items.filter(item => item.group === name).length
-        await e.reply(['原神影音', `g角色视频（${count('角色视频')}）`, `g过场动画（${count('过场动画')}）`, `g其他视频（${count('其他视频')}）`, '搜索：g影音 名字，选序号播放'].join('\n'))
+        await e.reply(['原神影音', `#角色视频（${count('角色视频')}）`, `#过场动画（${count('过场动画')}）`, `#其他视频（${count('其他视频')}）`, '搜索：#影音 名字，选序号播放；字母写法：g影音'].join('\n'))
         return true
       }
       const result = await mediaVideos('ys', keyword || kind)
@@ -478,7 +478,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: `「${keyword}」的视频`,
       subtitle: `第 ${current}/${totalPage} 页 · 共 ${items.length} 条`,
       body: `<div class="results">${rows}</div>`,
-      footer: `发送 #图鉴${start + 1} 播放这一条${next}`,
+      footer: `发送 #${start + 1} 播放这一条${next}`,
       extraCss: resultCss,
     }), items.slice(start, start + size).map((item, index) => `${start + index + 1}. ${item.name}`).join('\n'))
     return true
@@ -645,7 +645,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       title: `「${keyword}」`,
       subtitle: '有多个同名词条，发送序号打开',
       body: view.body,
-      footer: '例如 g1 或 #1',
+      footer: '例如 #1',
       extraCss: resultCss,
     }), `${keyword}有多个同名词条`)
     return true
@@ -676,7 +676,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         title: `「${keyword}」`,
         subtitle: `选一个再看${focus.name}`,
         body: view.body,
-        footer: `发送 g序号 或 #序号 查看${focus.name}，例如 g1、#1`,
+        footer: `发送 #序号 查看${focus.name}，例如 #1`,
         extraCss: resultCss,
       }))
     } catch (err) {
