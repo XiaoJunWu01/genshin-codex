@@ -4,6 +4,8 @@ import { fileURLToPath } from 'url'
 
 const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 function pluginFile(relative) {
+  const local = relative.startsWith('genshin-codex/') ? path.resolve(pluginRoot, relative.slice('genshin-codex/'.length)) : ''
+  if (local && fs.existsSync(local)) return local
   const file = path.resolve(pluginRoot, '..', relative)
   return fs.existsSync(file) ? file : ''
 }
@@ -14,6 +16,10 @@ const sources = {
     ['miao-plugin/resources/meta-gs/artifact/alias.js', 'artifact'],
     ['genshin/defSet/role/name.yaml', 'character'],
     ['genshin/config/role.name.yaml', 'character'],
+    ['atlas/resource/Forlibrary/Genshin-Atlas/othername/weapon.yaml', 'weapon'],
+    ['atlas/resource/Forlibrary/Genshin-Atlas/othername/artifact.yaml', 'artifact'],
+    ['genshin-codex/resources/alias/gs-weapon.yaml', 'weapon'],
+    ['genshin-codex/resources/alias/gs-artifact.yaml', 'artifact'],
   ],
   sr: [
     ['genshin/defSet/role/sr_name.yaml', 'character'],
@@ -21,9 +27,21 @@ const sources = {
     ['miao-plugin/resources/meta-sr/weapon/alias.js', 'weapon'],
     ['miao-plugin/resources/meta-sr/artifact/alias.js', 'artifact'],
     ['StarRail-plugin/defSet/alias.yaml', 'character'],
+    ['atlas/resource/Forlibrary/star-rail-atlas/othername/role.yaml', 'character'],
+    ['atlas/resource/Forlibrary/star-rail-atlas/othername/lightcone.yaml', 'weapon'],
+    ['atlas/resource/Forlibrary/star-rail-atlas/othername/relic.yaml', 'artifact'],
+    ['genshin-codex/resources/alias/sr-role.yaml', 'character'],
+    ['genshin-codex/resources/alias/sr-lightcone.yaml', 'weapon'],
+    ['genshin-codex/resources/alias/sr-relic.yaml', 'artifact'],
   ],
   zzz: [
     ['ZZZ-Plugin/defSet/alias.yaml', 'character'],
+    ['atlas/resource/Forlibrary/zzz-atlas/othername/role.yaml', 'character'],
+    ['atlas/resource/Forlibrary/zzz-atlas/othername/音擎.yaml', 'weapon'],
+    ['genshin-codex/resources/alias/zzz-character.yaml', 'character'],
+    ['genshin-codex/resources/alias/zzz-role.yaml', 'character'],
+    ['genshin-codex/resources/alias/zzz-engine.yaml', 'weapon'],
+    ['genshin-codex/resources/alias/zzz-disk.yaml', 'artifact'],
   ],
 }
 const cache = new Map()
@@ -122,12 +140,10 @@ export function aliasNames(game, keyword) {
 export function entryPattern(game, kinds = ['character', 'weapon', 'artifact']) {
   const allowed = new Set(kinds)
   const names = new Set()
-  for (const items of indexOf(game).values()) {
-    for (const item of items) {
-      if (allowed.has(item.kind)) names.add(item.name)
-    }
+  for (const [key, items] of indexOf(game)) {
+    if (items.some(item => allowed.has(item.kind))) names.add(key)
   }
-  return [...names].sort((a, b) => b.length - a.length).join('|')
+  return [...names].filter(name => name.length >= 2).sort((a, b) => b.length - a.length).join('|')
 }
 
 const upcomingFiles = {

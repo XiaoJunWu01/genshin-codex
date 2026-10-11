@@ -3,7 +3,7 @@ import {
   ENTRY_CHANNEL, channelOf, channelPattern, gameOf, getGameEntry, listGame,
   mediaClip, mediaGroups, mediaImages, mediaOf, mediaVideos, resolveVideo, searchGame,
 } from '../../model/games.js'
-import { upcomingName } from '../../model/alias.js'
+import { entryPattern, aliasNames, upcomingName } from '../../model/alias.js'
 import { entryCss, resultCss, themeOf } from './theme.js'
 import { GAME_CSS, boardHtml, entryHtml, pageHtml, renderHtml, resultHtml } from './page.js'
 
@@ -20,6 +20,7 @@ export function gamePlugin(spec) {
           { reg: `^#?${spec.letter}(?![a-z#])(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
+          ...(entryPattern(spec.key) ? [{ reg: `^#(${entryPattern(spec.key)})$`, fnc: 'queryBare', priority: 1 }] : []),
           { reg: `^#?${spec.letter}(?![a-z#])(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
           { reg: `^#?${spec.letter}(?![a-z#])\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
           { reg: `^(?:#|g)?(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
@@ -55,6 +56,14 @@ export function gamePlugin(spec) {
         logger.error(`[${this.spec.name}] 截图失败:`, err)
       }
       return e.reply(fallback || '图片渲染失败，请稍后重试')
+    }
+
+    async queryBare(e) {
+      const keyword = String(e.msg || '').replace(/^#/, '').trim()
+      const official = aliasNames(this.spec.key, keyword)[0] || keyword
+      if (!official) return false
+      e.msg = `${this.spec.letter}${official}`
+      return this.query(e)
     }
 
     async help(e) {

@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url'
 import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
-import { entryPattern, upcomingName } from '../model/alias.js'
+import { aliasNames, entryPattern, upcomingName } from '../model/alias.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -649,8 +649,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
+    const official = aliasNames('gs', keyword)[0] || keyword
     if (!keyword) return false
-    return this.openExact(e, keyword)
+    return this.openExact(e, official)
   }
 
   async queryIndex(e) {
