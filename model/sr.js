@@ -52,9 +52,11 @@ function formatCharacter(game, content) {
         const focus = /星魂/.test(module.name) ? 'eidolon' : /推荐/.test(module.name) ? 'recommend' : /故事|语音|关系/.test(module.name) ? 'story' : ''
         const people = focus === 'recommend' ? peopleFromHtml(data.richText) : []
         const eidolons = focus === 'eidolon' ? richCards(data.richText) : []
-        const cards = people.length ? people : (eidolons.length ? eidolons : cardsFromHtml(data.richText))
+        const entryCards = focus === 'recommend' ? recommendationCards(data.richText) : []
+        const cards = focus === 'recommend' ? (entryCards.length ? entryCards : people) : (eidolons.length ? eidolons : cardsFromHtml(data.richText))
         const limit = focus === 'eidolon' || focus === 'recommend' ? cards.length : 8
-        remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, [data.richText], [], focus))
+        const empty = focus === 'recommend' && !cards.length ? `暂无${module.name || '推荐'}，可能是图鉴数据暂未收录。` : ''
+        remember(sections, parts, cards.length ? section(module.name, [], cards.slice(0, limit), focus) : section(module.name, focus === 'recommend' ? [] : [data.richText], [], focus, [], [], [], empty))
       } else if (component.componentId === 'role_voice') {
         const voices = (data.list || []).map(item => {
           const label = textOf(item.tabName)
@@ -168,6 +170,34 @@ function traceScaling(table, description = '') {
       values: rows.map(row => textOf(row?.[index + 1])),
     })).filter(row => row.values.some(Boolean)),
   }
+}
+
+function recommendationCards(html) {
+  const source = String(html || '').replace(/\\"/g, '"')
+  const cards = []
+  const seen = new Set()
+  for (const match of source.matchAll(/data-entry-title="([^"]+)"/g)) {
+    const name = textOf(match[1])
+    if (!name || seen.has(name)) continue
+    const start = source.lastIndexOf('<', match.index)
+    const nextTitle = source.indexOf('data-entry-title=', match.index + match[0].length)
+    const nextName = source.indexOf('data-entry-name=', match.index + match[0].length)
+    const endCandidates = [nextTitle, nextName].filter(index => index >= 0)
+    const end = endCandidates.length ? Math.min(...endCandidates) : source.length
+    const block = source.slice(start < 0 ? match.index : start, end)
+    const icon = block.match(/data-entry-icon="([^"]+)"/)?.[1] || block.match(/<img[^>]+src="([^"]+)"/)?.[1] || ''
+    seen.add(name)
+    cards.push({ name, icon })
+  }
+  for (const match of source.matchAll(/<a[^>]+href="\/sr\/wiki\/content\/\d+\/detail[^>]*>([\s\S]*?)<\/a>/gi)) {
+    const name = textOf(match[1])
+    if (!name || seen.has(name) || /推荐|属性|生命|攻击|防御/.test(name)) continue
+    const block = source.slice(Math.max(0, match.index - 900), match.index + match[0].length)
+    const icon = block.match(/<img[^>]+src="([^"]+)"/i)?.[1] || ''
+    seen.add(name)
+    cards.push({ name, icon })
+  }
+  return cards
 }
 
 function richCards(html) {

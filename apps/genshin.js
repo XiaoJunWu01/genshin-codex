@@ -379,7 +379,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     const parts = entry.parts || {}
     const links = WIKI_FOCUS
       .filter(focus => parts[focus.id]?.length)
-      .map(focus => `<span>#g${focus.name} ${escapeHtml(entry.name)}</span>`)
+      .map(focus => `<span>#${focus.name} ${escapeHtml(entry.name)}</span>`)
       .join('')
     return links ? `<div class="more"><em>分开查看</em>${links}</div>` : ''
   }

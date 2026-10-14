@@ -239,7 +239,7 @@ section p b.word{font-weight:800}
 .effects .equip{display:block;min-height:0;padding:18px 20px}
 .effects .equip b{font-size:28px}
 .effects .equip p{margin-top:8px;color:#334155;font-size:26px;line-height:1.7}
-.equips{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.equips{display:grid;grid-template-columns:1fr;gap:12px}.equips .equip{display:block;min-width:0}.equips .equip .icons{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}.equips .equip .icons img{width:72px;height:72px;flex:0 0 72px}.equips .equip>div:not(.icons){min-width:0}.equips .equip b{overflow-wrap:anywhere}.equips .equip p{line-height:1.55;white-space:normal}
 .skills{display:flex;flex-direction:column;gap:14px}
 .skill{display:flex;gap:18px;align-items:flex-start;padding:22px;border-radius:22px;background:var(--soft);border:1px solid rgba(15,23,42,.05)}
 .skill .icons{flex-shrink:0}
