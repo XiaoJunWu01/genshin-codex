@@ -23,9 +23,9 @@ export function gamePlugin(spec) {
           { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^\\${mark}(?!图鉴目录|图鉴帮助|帮助|影音|表情包|壁纸|角色视频|其他视频)[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
+          { reg: `^\\${mark}(?!图鉴目录|图鉴帮助|帮助|影音|表情包|壁纸|角色视频|其他视频)(?![^\\s${mark}]*(?:排行榜|榜单|排行|排名))[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
           { reg: `^[${marks}](?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
-          { reg: `^[${marks}]\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
+          { reg: `^[${marks}](?![^\\s${mark}]*(?:排行榜|榜单|排行|排名))\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
           { reg: `^(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
           { reg: `^(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
         ],
@@ -107,6 +107,11 @@ export function gamePlugin(spec) {
         if (!keyword) return this.catalog(e, channel)
         if (page && /影音|视频|pv|PV/.test(rest)) return this.openVideoPage(e, keyword, page)
         const results = await searchGame(this.spec.key, keyword, { channelId: channel?.id || 0, limit: 8 })
+        if (!channel && !focus && !results.some(item => item.score >= 100)) {
+          const upcoming = upcomingName(this.spec.key === 'sr' ? 'sr' : 'zzz', keyword)
+          if (!upcoming) return false
+        }
+        if (!channel && !focus && !results.length) return false
         return this.openResults(e, results, keyword, channel, focus)
       } catch (err) {
         logger.error(`[${game.name}图鉴]`, err)
