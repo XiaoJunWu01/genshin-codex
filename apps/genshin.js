@@ -91,7 +91,6 @@ export default class WikiPlugin extends plugin {
         { reg: '^#?g\\s*(\\S{2,})$', fnc: 'queryG', priority: 1 },
         { reg: '^#?g\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
         { reg: '^#\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
-        { reg: '^#(?!角色记录$|角色面板$|角色卡$|角色详情$|角色攻略$)[^\\s#]{2,24}$', fnc: 'queryBare', priority: 1 },
       ],
     })
   }
@@ -449,10 +448,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         return true
       }
       const result = await mediaVideos('ys', keyword || kind)
-      if (!result.items.length) {
-        await e.reply(`影音没有找到「${keyword || kind}」。`)
-        return true
-      }
+      if (!result.items.length) return false
       return this.showVideoPage(e, result.items, keyword || kind, page)
     } catch (err) {
       logger.error('[原神影音]', err)
@@ -601,13 +597,11 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
 
   async queryBare(e) {
     const keyword = String(e.msg || '').replace(/^#/, '').trim()
-    if (/专武|专属武器/.test(keyword)) return this.openSignature(e, keyword)
-    const upcoming = upcomingName('gs', keyword)
-    if (upcoming) {
-      await e.reply(`暂无「${upcoming}」的角色数据，敬请期待。`)
-      return true
-    }
     const names = aliasNames('gs', keyword)
+    if (/专武|专属武器/.test(keyword)) {
+      if (!names.length) return false
+      return this.openSignature(e, keyword)
+    }
     if (!names.length) return false
     return this.openExact(e, names[0])
   }
@@ -750,12 +744,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       const matched = parsed.channel
         ? results.filter(item => normalizeWikiName(item.name) === wanted)
         : results.filter(item => item.score >= 100)
-      if (!matched.length) {
-        await e.reply(parsed.channel
-          ? `${parsed.channel.name}里没有「${parsed.keyword}」。`
-          : `没有找到「${parsed.keyword}」。名字差一个字时，用 #图鉴 ${parsed.keyword} 搜索`)
-        return true
-      }
+      if (!matched.length) return false
       sessions.set(key, { results: matched, keyword: parsed.keyword, time: Date.now() })
 
       const chosen = parsed.page === 1 ? this.uniqueHit(matched) : null
@@ -775,7 +764,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }))
     } catch (err) {
       logger.error('[观测枢图鉴]', err)
-      await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+      return false
     }
     return true
   }

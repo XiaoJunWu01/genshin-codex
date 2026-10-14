@@ -23,9 +23,8 @@ export function gamePlugin(spec) {
           { reg: `^[${marks}](?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:影音|pv|PV)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
           { reg: `^(?:${wordPattern})(?:表情包|壁纸|角色视频|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery', priority: 1 },
-          { reg: `^\\${mark}(?!图鉴目录|图鉴帮助|帮助|影音|表情包|壁纸|角色视频|其他视频)(?![^\\s${mark}]*(?:排行榜|榜单|排行|排名))[^\\s${mark}]{2,24}$`, fnc: 'queryBare', priority: 1 },
           { reg: `^[${marks}](?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
-          { reg: `^[${marks}](?![^\\s${mark}]*(?:排行榜|榜单|排行|排名))\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
+          { reg: `^[${marks}]\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
           { reg: `^(?:${wordPattern})(?:\\s*帮助)?$`, fnc: 'help', priority: 2 },
           { reg: `^(?:${wordPattern})\\s*(?:\\d+|\\S{2,})`, fnc: 'query', priority: 2 },
         ],
@@ -66,7 +65,7 @@ export function gamePlugin(spec) {
       const keyword = String(e.msg || '').replace(/^[^\s]/, '').trim()
       const names = aliasNames(this.spec.key, keyword)
       if (!names.length) return false
-      e.msg = `${this.spec.letter}${/专武/.test(keyword) ? keyword : names[0]}`
+      e.msg = `${this.spec.letter}${/专武|专属音擎|专属光锥/.test(keyword) ? keyword : names[0]}`
       return this.query(e)
     }
 
@@ -97,10 +96,7 @@ export function gamePlugin(spec) {
         const official = aliasNames(this.spec.key, keyword)[0] || ''
         if (!channel && !focus && /专武|专属音擎|专属光锥/.test(keyword)) {
           const weaponChannel = (await channelsOf(this.spec.key)).find(item => /音擎|光锥|武器/.test(item.name))
-          if (!kinds.includes('weapon') || !weaponChannel || !official) {
-            await e.reply(`「${keyword.replace(/专武|专属音擎|专属光锥/g, '')}」暂无专属${weaponChannel?.name || '武器'}，可以查看 ${this.spec.mark || '#'}推荐 ${keyword.replace(/专武|专属音擎|专属光锥/g, '')}`)
-            return true
-          }
+          if (!kinds.includes('weapon') || !weaponChannel || !official) return false
           return this.openResults(e, await searchGame(this.spec.key, official, { channelId: weaponChannel.id, limit: 8 }), official, weaponChannel, null)
         }
         if (!channel && !focus && official && kinds.length === 1) keyword = official
@@ -111,11 +107,10 @@ export function gamePlugin(spec) {
           const upcoming = upcomingName(this.spec.key === 'sr' ? 'sr' : 'zzz', keyword)
           if (!upcoming) return false
         }
-        if (!channel && !focus && !results.length) return false
         return this.openResults(e, results, keyword, channel, focus)
       } catch (err) {
         logger.error(`[${game.name}图鉴]`, err)
-        await e.reply('图鉴查询失败：' + (err.message || '请稍后重试'))
+        return false
       }
       return true
     }
@@ -144,7 +139,7 @@ export function gamePlugin(spec) {
         }), matched.map((item, index) => `${index + 1}. ${item.name}`).join('\n'))
       } catch (err) {
         logger.error(`[${game.name}图鉴]`, err)
-        await e.reply(`${game.name}图鉴查询失败，请稍后重试`)
+        return false
       }
       return true
     }
@@ -287,10 +282,7 @@ export function gamePlugin(spec) {
       try {
         const groups = await mediaGroups(this.spec.key)
         const chosen = keyword ? groups.find(item => item.name === keyword) || groups.find(item => item.name.includes(keyword)) : null
-        if (!chosen) {
-          await e.reply([`${game.name}${spec.name}`, ...groups.slice(0, 20).map(item => `${this.spec.mark || '#'}${spec.name} ${item.name}`)].join('\n'))
-          return true
-        }
+        if (!chosen) return false
         const images = await mediaImages(this.spec.key, chosen.name)
         if (!images.length) {
           await e.reply(`「${chosen.name}」没有可发送的图片。`)
@@ -316,10 +308,7 @@ export function gamePlugin(spec) {
           return true
         }
         const result = await mediaVideos(this.spec.key, keyword)
-        if (!result.items.length) {
-          await e.reply(`${spec.name}没有找到「${keyword}」。`)
-          return true
-        }
+        if (!result.items.length) return false
         return this.showVideoPage(e, result.items, keyword, 1)
       } catch (err) {
         logger.error(`[${game.name}${spec.name}]`, err)
