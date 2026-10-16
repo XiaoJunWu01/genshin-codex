@@ -29,7 +29,9 @@ const sources = {
     ['atlas/resource/Forlibrary/Genshin-Atlas/othername/weapon.yaml', 'weapon'],
     ['atlas/resource/Forlibrary/Genshin-Atlas/othername/artifact.yaml', 'artifact'],
     ['genshin-codex/resources/alias/gs-weapon.yaml', 'weapon'],
+    ['genshin-codex/resources/alias/gs-weapon-miao.js', 'weapon'],
     ['genshin-codex/resources/alias/gs-artifact.yaml', 'artifact'],
+    ['genshin-codex/resources/alias/gs-character-miao.js', 'character'],
     ['genshin-codex/resources/alias/gs-artifact-miao.js', 'artifact'],
   ],
   sr: [
