@@ -6,8 +6,18 @@ const pluginRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '.
 function pluginFile(relative) {
   const local = relative.startsWith('genshin-codex/') ? path.resolve(pluginRoot, relative.slice('genshin-codex/'.length)) : ''
   if (local && fs.existsSync(local)) return local
-  const file = path.resolve(pluginRoot, '..', relative)
-  return fs.existsSync(file) ? file : ''
+  for (let base = pluginRoot; base && base !== path.dirname(base); base = path.dirname(base)) {
+    const direct = path.resolve(base, '..', relative)
+    if (fs.existsSync(direct)) return direct
+    try {
+      for (const child of fs.readdirSync(path.dirname(base), { withFileTypes: true })) {
+        if (!child.isDirectory() || child.name === path.basename(base)) continue
+        const candidate = path.resolve(path.dirname(base), child.name, relative)
+        if (fs.existsSync(candidate)) return candidate
+      }
+    } catch {}
+  }
+  return ''
 }
 const sources = {
   gs: [
@@ -61,9 +71,9 @@ function readPairs(file) {
   const pairs = []
   for (const block of text.matchAll(/export const \w+\s*=\s*\{([\s\S]*?)\n\}/g)) {
     for (const line of block[1].split(/\r?\n/)) {
-      const matched = line.match(/^\s*(?:'([^']+)'|"([^"]+)"|([^:,'"]+))\s*:\s*'([^']*)'/)
+      const matched = line.match(/^\s*(?:'([^']+)'|"([^"]+)"|([^:,'"]+))\s*:\s*(['"])(.*?)\4\s*,?\s*$/)
       if (!matched) continue
-      pairs.push([matched[1] || matched[2] || matched[3].trim(), splitAliases(matched[4])])
+      pairs.push([matched[1] || matched[2] || matched[3].trim(), splitAliases(matched[5])])
     }
   }
   return pairs
