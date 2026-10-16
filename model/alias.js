@@ -30,6 +30,7 @@ const sources = {
     ['atlas/resource/Forlibrary/Genshin-Atlas/othername/artifact.yaml', 'artifact'],
     ['genshin-codex/resources/alias/gs-weapon.yaml', 'weapon'],
     ['genshin-codex/resources/alias/gs-artifact.yaml', 'artifact'],
+    ['genshin-codex/resources/alias/gs-artifact-miao.js', 'artifact'],
   ],
   sr: [
     ['genshin/defSet/role/sr_name.yaml', 'character'],
