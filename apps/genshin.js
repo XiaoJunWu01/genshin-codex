@@ -455,7 +455,9 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
   }
 
   async routeMap(e) {
-    const keyword = String(e.msg || '').replace(/^#?g?\\s*/, '').replace(/^(?:路线|采集路线|地图路线)\\s*/, '').trim()
+    const keyword = String(e.msg || '')
+      .replace(/^\s*(?:#|g)?\s*(?:路线|采集路线|地图路线)\s*/i, '')
+      .trim()
     if (!keyword) {
       await e.reply('请发送：#路线 材料名，例如：#路线 霓裳花')
       return true
