@@ -32,6 +32,7 @@ export const defaultHelp = [
     { title: '#敌人 丘丘人', desc: '敌人资料' },
     { title: '#食物 甜甜花酿鸡', desc: '食物资料' },
     { title: '#材料 霓裳花', desc: '材料资料' },
+     { title: '#路线 霓裳花', desc: '推荐采集路线' },
     { title: '#动物 虹晶星花鱼', desc: '动物资料' },
     { title: '#成就 无束的残月', desc: '成就资料' },
     { title: '#任务 至冬宫的来信', desc: '任务资料' },
