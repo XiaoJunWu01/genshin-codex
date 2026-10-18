@@ -445,8 +445,21 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await page.goto(route.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
       await new Promise(resolve => setTimeout(resolve, 9000))
       await page.evaluate(() => {
+        const selectors = [
+          '[class*="login"]', '[class*="Login"]', '[class*="modal"]', '[class*="Modal"]',
+          '[class*="dialog"]', '[class*="Dialog"]', '[class*="popup"]', '[class*="Popup"]',
+          '[role="dialog"]', '.mhy-account-flow', '.mhy-login-dialog',
+        ]
+        for (const selector of selectors) {
+          document.querySelectorAll(selector).forEach(node => {
+            node.style.display = 'none'
+            node.remove()
+          })
+        }
         document.querySelectorAll('iframe').forEach(frame => { frame.style.visibility = 'hidden' })
+        document.body.style.overflow = 'hidden'
       }).catch(() => {})
+      await new Promise(resolve => setTimeout(resolve, 500))
       const buffer = await page.screenshot({ type: 'png' })
       return segment.image(buffer)
     } finally {
