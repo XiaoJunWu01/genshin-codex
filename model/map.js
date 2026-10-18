@@ -34,11 +34,13 @@ export async function recommendedRoutes(keyword = '') {
     labelId: item.main_label_id || 0,
   })).filter(item => item.url && item.name)
   if (!text) return list.slice(0, 8)
-  const matched = list.filter(item => item.name.toLowerCase().includes(text))
-  return (matched.length ? matched : list.filter(item => /采集|收集|路线/.test(item.name))).slice(0, 8)
+  const aliases = { '霓虹花': '霓裳花' }
+  const terms = [text, aliases[text] || ''].filter(Boolean)
+  return list.filter(item => terms.some(term => item.name.toLowerCase().includes(term))).slice(0, 8)
 }
 
 export function mapRouteHtml(route) {
-  const src = String(route?.url || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;')
-  return `<!doctype html><html><head><meta charset="UTF-8"><style>*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e8eef5}iframe{display:block;width:100%;height:100%;border:0}</style></head><body><iframe src="${src}" allow="fullscreen"></iframe><script>setTimeout(()=>document.documentElement.classList.add('ready'),1200)</script></body></html>`
+  const src = String(route?.url || '')
+  const encoded = JSON.stringify(src)
+  return `<!doctype html><html><head><meta charset="UTF-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e8eef5}</style></head><body><script>location.replace(${encoded})</script></body></html>`
 }

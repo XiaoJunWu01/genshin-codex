@@ -436,6 +436,24 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }))
   }
 
+  async captureRoute(route) {
+    const browser = await puppeteer.browserInit?.()
+    if (!browser?.newPage) return null
+    const page = await browser.newPage()
+    try {
+      await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
+      await page.goto(route.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
+      await new Promise(resolve => setTimeout(resolve, 9000))
+      await page.evaluate(() => {
+        document.querySelectorAll('iframe').forEach(frame => { frame.style.visibility = 'hidden' })
+      }).catch(() => {})
+      const buffer = await page.screenshot({ type: 'png' })
+      return segment.image(buffer)
+    } finally {
+      await page.close().catch(() => {})
+    }
+  }
+
   async routeMap(e) {
     const keyword = String(e.msg || '').replace(/^#?g?\\s*/, '').replace(/^(?:路线|采集路线|地图路线)\\s*/, '').trim()
     if (!keyword) {
@@ -450,7 +468,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       }
       const images = []
       for (const route of routes) {
-        const image = await this.render(mapRouteHtml(route))
+        const image = await this.captureRoute(route) || await this.render(mapRouteHtml(route))
         if (image) images.push({ name: route.name, image })
       }
       if (!images.length) {
