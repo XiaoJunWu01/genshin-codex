@@ -472,6 +472,12 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await new Promise(resolve => setTimeout(resolve, 500))
       for (const frame of page.frames()) await cleanFrame(frame)
       await page.keyboard.press('Escape').catch(() => {})
+       // The map draws the update-log dialog in canvas; DOM selectors cannot close it.
+       const viewport = page.viewport()
+       if (viewport?.width && viewport.height) {
+         await page.mouse.click(Math.round(viewport.width * 0.665), Math.round(viewport.height * 0.18)).catch(() => {})
+         await new Promise(resolve => setTimeout(resolve, 800))
+       }
       await new Promise(resolve => setTimeout(resolve, 300))
       const canvases = await page.$$('canvas')
       let mapCanvas = null
