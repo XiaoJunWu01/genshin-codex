@@ -30,7 +30,7 @@ export async function recommendedRoutes(keyword = '') {
   const list = (data?.list || []).map(item => ({
     id: item.id,
     name: decode(item.name),
-    url: item.url || '',
+    url: String(item.url || '').replace(/^https:\/\/webstatic\.mihoyo\.com\/ys\/app\/interactive-map/i, 'https://act.mihoyo.com/ys/app/interactive-map'),
     labelId: item.main_label_id || 0,
   })).filter(item => item.url && item.name)
   if (!text) return list.slice(0, 8)
