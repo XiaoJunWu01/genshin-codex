@@ -456,6 +456,17 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
           if ((style.position === 'fixed' || style.position === 'absolute') && Number(style.zIndex || 0) > 1000 && rect.width > innerWidth * .25 && rect.height > innerHeight * .2) hide(node)
         }
         document.querySelectorAll('button,[role="button"]').forEach(button => { if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click() })
+        for (const title of [...document.querySelectorAll('body *')].filter(node => /^更新日志$/.test((node.innerText || '').trim()))) {
+          let panel = title
+          for (let i = 0; i < 6 && panel.parentElement; i++) {
+            const rect = panel.getBoundingClientRect()
+            if (rect.width > 240 && rect.width < innerWidth * .8 && rect.height > 180) break
+            panel = panel.parentElement
+          }
+          const close = [...panel.querySelectorAll('button,[role="button"],[aria-label]')].find(node => /关闭|取消|跳过|close|×/i.test(node.innerText || node.getAttribute('aria-label') || ''))
+          if (close) close.click()
+          else panel.remove()
+        }
       }).catch(() => {})
       for (const frame of page.frames()) await cleanFrame(frame)
       await new Promise(resolve => setTimeout(resolve, 500))
