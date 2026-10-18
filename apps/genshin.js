@@ -444,42 +444,21 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
       await page.goto(route.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
       await new Promise(resolve => setTimeout(resolve, 9000))
-      await page.evaluate(() => {
-        const selectors = [
-          '[class*="login"]', '[class*="Login"]', '[class*="modal"]', '[class*="Modal"]',
-          '[class*="dialog"]', '[class*="Dialog"]', '[class*="popup"]', '[class*="Popup"]',
-          '[class*="mask"]', '[class*="Mask"]', '[class*="overlay"]', '[class*="Overlay"]',
-          '[role="dialog"]', '[aria-modal="true"]', '.mhy-account-flow', '.mhy-login-dialog',
-        ]
-        for (const selector of selectors) {
-          document.querySelectorAll(selector).forEach(node => {
-            if (node !== document.body && node !== document.documentElement) node.remove()
-          })
-        }
-        const loginWords = /登录|手机号|验证码|账号密码|同意并登录|登录后查看|立即登录/
+      const cleanFrame = async frame => frame.evaluate(() => {
+        const selectors = ['[class*="login"]','[class*="Login"]','[class*="modal"]','[class*="Modal"]','[class*="dialog"]','[class*="Dialog"]','[class*="popup"]','[class*="Popup"]','[class*="mask"]','[class*="Mask"]','[role="dialog"]','[aria-modal="true"]','.mhy-account-flow','.mhy-login-dialog']
+        const hide = node => { if (node !== document.body && node !== document.documentElement) { node.style.setProperty('display','none','important'); node.remove() } }
+        selectors.forEach(selector => document.querySelectorAll(selector).forEach(hide))
+        const words = /登录|手机号|验证码|账号密码|同意并登录|登录后查看|立即登录|分享路线/
         for (const node of [...document.querySelectorAll('body *')]) {
-          const text = (node.innerText || '').trim()
-          const style = getComputedStyle(node)
-          if (text && text.length < 180 && loginWords.test(text) && style.position === 'fixed') {
-            let target = node
-            for (let i = 0; i < 4 && target.parentElement; i++) {
-              const parent = target.parentElement
-              const parentStyle = getComputedStyle(parent)
-              if (parentStyle.position === 'fixed' || Number(parentStyle.zIndex || 0) > 10) target = parent
-              else break
-            }
-            target.remove()
-          }
+          const style = getComputedStyle(node), rect = node.getBoundingClientRect(), text = (node.innerText || '').trim()
+          if ((style.position === 'fixed' || style.position === 'absolute') && rect.width > 220 && rect.height > 100 && words.test(text)) hide(node)
+          if ((style.position === 'fixed' || style.position === 'absolute') && Number(style.zIndex || 0) > 1000 && rect.width > innerWidth * .25 && rect.height > innerHeight * .2) hide(node)
         }
-        for (const root of [document, ...[...document.querySelectorAll('*')].filter(node => node.shadowRoot)]) {
-          root.querySelectorAll?.('button,[role="button"]').forEach(button => {
-            if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click()
-          })
-        }
-        document.querySelectorAll('iframe').forEach(frame => { frame.style.visibility = 'hidden' })
-        document.body.style.overflow = 'hidden'
+        document.querySelectorAll('button,[role="button"]').forEach(button => { if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click() })
       }).catch(() => {})
+      for (const frame of page.frames()) await cleanFrame(frame)
       await new Promise(resolve => setTimeout(resolve, 500))
+      for (const frame of page.frames()) await cleanFrame(frame)
       const buffer = await page.screenshot({ type: 'png' })
       return segment.image(buffer)
     } finally {

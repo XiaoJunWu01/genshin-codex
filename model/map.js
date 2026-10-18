@@ -42,5 +42,24 @@ export async function recommendedRoutes(keyword = '') {
 export function mapRouteHtml(route) {
   const src = String(route?.url || '')
   const encoded = JSON.stringify(src)
-  return `<!doctype html><html><head><meta charset="UTF-8"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e8eef5}</style></head><body><script>location.replace(${encoded})</script></body></html>`
+  return `<!doctype html><html><head><meta charset="UTF-8"><style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e8eef5}
+/* 米游社登录/分享弹窗，保留地图本体 */
+[class*="login"],[class*="Login"],[class*="modal"],[class*="Modal"],[class*="dialog"],[class*="Dialog"],[class*="popup"],[class*="Popup"],[class*="mask"],[class*="Mask"],[role="dialog"],[aria-modal="true"]{display:none!important;visibility:hidden!important}
+</style></head><body><script>
+location.replace(${encoded})
+setTimeout(()=>{
+  const words=/登录|手机号|验证码|账号密码|同意并登录|立即登录|登录后查看/
+  const hide=()=>{
+    for(const root of [document,...document.querySelectorAll('*')]){
+      const nodes=root.querySelectorAll?.('*')||[]
+      for(const node of nodes){
+        const style=getComputedStyle(node), rect=node.getBoundingClientRect(), text=(node.innerText||'').trim()
+        if((style.position==='fixed'||style.position==='absolute') && rect.width>240 && rect.height>120 && rect.width<window.innerWidth*.95 && rect.height<window.innerHeight*.95 && (words.test(text)||Number(style.zIndex||0)>1000)) node.remove()
+      }
+    }
+  }
+  hide(); new MutationObserver(hide).observe(document.documentElement,{subtree:true,childList:true,attributes:true})
+},3000)
+</script></body></html>`
 }
