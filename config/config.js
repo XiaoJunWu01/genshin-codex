@@ -1,6 +1,7 @@
 import fs from 'fs'
 import path from 'path'
 import { fileURLToPath } from 'url'
+import { defaultHelp } from './help.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const pluginRoot = path.join(__dirname, '..')
@@ -8,8 +9,32 @@ const configFile = path.join(__dirname, 'config.json')
 
 export const defaultConfig = {
   backgroundPath: 'resources/background/bg.png',
-  containerOpacity: 0.72,
-  blur: 6,
+  theme: 'miao',
+  columns: 3,
+  glass: true,
+  containerOpacity: 0.22,
+  blur: 12,
+  titleColor: '#ffffff',
+  commandColor: '#fff3cf',
+  textColor: '#ffffff',
+  fontFamily: 'Microsoft YaHei',
+  helpGroups: defaultHelp,
+}
+
+function normalizeHelp(value) {
+  const groups = Array.isArray(value) && value.length ? value : defaultHelp
+  return groups.map(group => ({
+    group: String(group?.group || '未命名').slice(0, 20),
+    common: group?.common === true,
+    list: (Array.isArray(group?.list) ? group.list : []).map(item => ({
+      title: String(item?.title || '').replace(/^(?:g)(?=\S)/, '#').replace(/^(?:s)(?=\S)/, '*').replace(/^(?:z)(?=\S)/, '%').slice(0, 40),
+      desc: String(item?.desc || '').slice(0, 40),
+    })).filter(item => item.title),
+  })).filter(group => group.list.length)
+}
+
+function colorOf(value, fallback) {
+  return /^#[0-9a-fA-F]{6}$/.test(String(value || '')) ? value : fallback
 }
 
 function clampNumber(value, min, max, fallback) {
@@ -23,9 +48,23 @@ function normalizeConfig(config = {}) {
     ...defaultConfig,
     ...config,
     backgroundPath: String(config.backgroundPath ?? defaultConfig.backgroundPath).trim(),
+    theme: ['miao', 'light', 'glass'].includes(config.theme) ? config.theme : defaultConfig.theme,
+    columns: [2, 3, 4].includes(Number(config.columns)) ? Number(config.columns) : defaultConfig.columns,
+    glass: config.glass !== false,
     containerOpacity: clampNumber(config.containerOpacity, 0, 1, defaultConfig.containerOpacity),
     blur: clampNumber(config.blur, 0, 30, defaultConfig.blur),
+    titleColor: colorOf(config.titleColor, defaultConfig.titleColor),
+    commandColor: colorOf(config.commandColor, defaultConfig.commandColor),
+    textColor: colorOf(config.textColor, defaultConfig.textColor),
+    fontFamily: String(config.fontFamily || defaultConfig.fontFamily).slice(0, 80),
+    helpGroups: normalizeHelp(config.helpGroups),
   }
+}
+
+export function saveWikiConfig(config) {
+  const next = normalizeConfig(config)
+  fs.writeFileSync(configFile, JSON.stringify(next, null, 2))
+  return next
 }
 
 export function getWikiConfig() {

@@ -1,7 +1,7 @@
 {
   "name": "genshin-codex",
-  "version": "1.0.0",
-  "description": "Yunzai-Bot 原神观测枢图鉴插件，查询角色、武器、圣遗物、魔物和食物",
+  "version": "1.4.0",
+  "description": "Yunzai-Bot V3 图鉴插件，查询原神、星穹铁道和绝区零的公开图鉴，并把结果渲染成图片",
   "type": "module",
   "main": "index.js",
   "author": "xiaowu",

@@ -1,3 +1,4 @@
+import { aliasNames } from './alias.js'
 const LIST_BASE = 'https://act-api-takumi-static.mihoyo.com'
 const ENTRY_BASE = 'https://api-takumi-static.mihoyo.com'
 const API_BASE = 'https://act-api-takumi.mihoyo.com'
@@ -22,7 +23,29 @@ export const WIKI_CHANNELS = [
   { id: 218, name: '圣遗物', aliases: ['圣遗物', '遗物', '圣遗'] },
   { id: 6, name: '敌人', aliases: ['敌人', '怪物', '魔物'] },
   { id: 21, name: '食物', aliases: ['食物', '料理', '食谱'] },
-  { id: 13, name: '背包', aliases: ['材料', '素材', '道具', '背包'] },
+  { id: 13, name: '背包', aliases: ['材料', '素材', '道具', '背包'], heavy: true },
+  { id: 278, name: '灰眸', aliases: ['灰眸'] },
+  { id: 255, name: '组织', aliases: ['组织', '势力'] },
+  { id: 252, name: '成就', aliases: ['成就'], heavy: true },
+  { id: 43, name: '任务', aliases: ['任务'], heavy: true },
+  { id: 49, name: '动物', aliases: ['动物', '生物'] },
+  { id: 68, name: '书籍', aliases: ['书籍', '书'] },
+  { id: 55, name: '冒险家协会', aliases: ['冒险家协会', '协会', '每日委托', '委托'] },
+  { id: 20, name: 'NPC', aliases: ['NPC', '商店', 'npc'], heavy: true },
+  { id: 54, name: '秘境', aliases: ['秘境'] },
+  { id: 65, name: '深境螺旋', aliases: ['深境螺旋', '深渊', '螺旋'] },
+  { id: 249, name: '幻想真境剧诗', aliases: ['幻想真境剧诗', '剧诗'] },
+  { id: 275, name: '幽境危战', aliases: ['幽境危战', '危战'] },
+  { id: 109, name: '名片', aliases: ['名片'] },
+  { id: 244, name: '头像', aliases: ['头像'] },
+  { id: 233, name: '角色牌', aliases: ['角色牌'] },
+  { id: 234, name: '行动牌', aliases: ['行动牌', '七圣召唤', '七圣'] },
+  { id: 235, name: '魔物牌', aliases: ['魔物牌'] },
+  { id: 130, name: '洞天', aliases: ['洞天', '尘歌壶', '家具'], heavy: true },
+  { id: 105, name: '活动', aliases: ['活动'] },
+  { id: 276, name: '供奉', aliases: ['供奉', '聚所', '地区供奉'] },
+  { id: 211, name: '装扮', aliases: ['装扮'] },
+  { id: 260, name: '酒馆挑战', aliases: ['酒馆挑战', '酒馆'] },
 ]
 
 const cache = {
@@ -51,6 +74,7 @@ export function stripHtml(value) {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/\\n/g, '\n').replace(/\\t/g, ' ')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/^[：:\s]+/, '')
@@ -77,10 +101,14 @@ function normalizeName(value) {
   return stripHtml(value).replace(/[【】\[\]()（）·\s]/g, '').toLowerCase()
 }
 
+export function normalizeWikiName(value) {
+  return normalizeName(value)
+}
+
 // 观测枢词条的 alias_name 是空的，角色俗称只能在本地维护。
 const CHARACTER_ALIASES = {
-  薇斯纳: ['维纳斯', '维纳', '维斯纳', '维斯娜'],
-  沃雅妮莎: ['沃雅'],
+  薇斯纳: ['维纳斯', '薇纳斯', '薇奈斯', '维奈斯', '维纳', '维斯纳', '维斯娜'],
+  沃雅妮莎: ['沃雅', '沃雅尼莎', '沃雅尼沙', '沃雅妮沙'],
   伊涅芙: ['伊涅'],
   菲林斯: ['菲林'],
   阿蕾奇诺: ['仆人', '阿蕾', '父亲'],
@@ -154,18 +182,25 @@ const CHARACTER_ALIASES = {
   '旅行者·草': ['草主', '草旅行者'],
 }
 
-const CHARACTER_ALIAS_INDEX = new Map()
-for (const [name, aliases] of Object.entries(CHARACTER_ALIASES)) {
-  for (const alias of aliases) {
-    const key = normalizeName(alias)
-    if (!key) continue
-    if (!CHARACTER_ALIAS_INDEX.has(key)) CHARACTER_ALIAS_INDEX.set(key, [])
-    CHARACTER_ALIAS_INDEX.get(key).push(name)
+const ENTRY_ALIASES = {
+  饰金之梦: ['饰金', '饰金套', '饰金四件'],
+}
+
+const ALIAS_INDEX = new Map()
+for (const table of [CHARACTER_ALIASES, ENTRY_ALIASES]) {
+  for (const [name, aliases] of Object.entries(table)) {
+    for (const alias of aliases) {
+      const key = normalizeName(alias)
+      if (!key) continue
+      if (!ALIAS_INDEX.has(key)) ALIAS_INDEX.set(key, [])
+      if (!ALIAS_INDEX.get(key).includes(name)) ALIAS_INDEX.get(key).push(name)
+    }
   }
 }
 
 function aliasTargets(keyword) {
-  return CHARACTER_ALIAS_INDEX.get(normalizeName(keyword)) || []
+  const local = ALIAS_INDEX.get(normalizeName(keyword)) || []
+  return [...new Set([...local, ...aliasNames('gs', keyword)])]
 }
 
 async function requestJson(url) {
@@ -181,9 +216,12 @@ export const WIKI_FOCUS = [
   { id: 'constellation', name: '命座', aliases: ['命座', '命之座', '星座'] },
   { id: 'ascension', name: '突破', aliases: ['突破', '突破材料', '材料'] },
   { id: 'story', name: '故事', aliases: ['故事', '背景', '简介', '介绍'] },
+  { id: 'recommend', name: '推荐', aliases: ['推荐', '配装', '搭配'] },
   { id: 'profile', name: '资料', aliases: ['资料', '属性', '档案', '信息'] },
+  { id: 'voice', name: '配音', aliases: ['配音', '声优', 'CV'] },
   { id: 'portrait', name: '立绘', aliases: ['立绘', '原画', '全身'] },
   { id: 'showcase', name: '展示', aliases: ['展示', '角色展示', '动作', '待机'] },
+  { id: 'detail', name: '全文', aliases: ['全文', '详细', '详情'] },
 ]
 
 export const WIKI_FOCUS_PATTERN = WIKI_FOCUS
@@ -210,6 +248,7 @@ async function getChannelItems(channelId) {
   const data = await requestJson(`${LIST_BASE}/common/blackboard/${APP_SN}/v1/home/content/list?app_sn=${APP_SN}&channel_id=${channelId}`)
   const items = []
   for (const channel of data?.list || []) {
+    const filters = parseChannelFilters(channel.ch_ext)
     for (const item of channel.list || []) {
       if (!item?.content_id || !item?.title) continue
       items.push({
@@ -220,6 +259,8 @@ async function getChannelItems(channelId) {
         alias: stripHtml(item.alias_name || ''),
         channelId,
         channelName: channel.name || '',
+        filters: parseItemFilters(item.ext),
+        filterSchema: filters,
       })
     }
   }
@@ -264,7 +305,6 @@ function scoreItem(item, keyword) {
 
   const mapped = aliasTargets(keyword).some(target => normalizeName(target) === name)
   let score = Math.max(rank(name), rank(alias), mapped ? 100 : 0)
-  if (!score && query.length >= 2 && [...query].every(char => name.includes(char))) score = 50
   if (!score) return 0
   if (CARD_CHANNELS.has(item.channelName) && score >= 95) score -= 5
   return score
@@ -282,8 +322,7 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
   }
 
   const mapped = aliasTargets(text)
-  const characterOnly = channelId === 25
-  const searchText = characterOnly && mapped.length === 1 ? mapped[0] : text
+  const searchText = channelId && mapped.length === 1 ? mapped[0] : text
 
   if (channelId) {
     for (const item of await getChannelItems(channelId)) add(item)
@@ -297,34 +336,211 @@ export async function searchWiki(keyword, { channelId = 0, limit = 8 } = {}) {
 
   let results = [...collected.values()]
     .map(item => ({ ...item, score: scoreItem(item, text) }))
-    .filter(item => item.score > 0)
+    .filter(item => item.score >= 95)
     .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
 
   if (!results.length && !channelId) {
-    const lists = await Promise.all(WIKI_CHANNELS.map(channel => getChannelItems(channel.id).catch(() => [])))
+    const lists = await Promise.all(
+      WIKI_CHANNELS.filter(channel => !channel.heavy).map(channel => getChannelItems(channel.id).catch(() => [])),
+    )
     for (const items of lists) items.forEach(add)
     results = [...collected.values()]
       .map(item => ({ ...item, score: scoreItem(item, text) }))
-      .filter(item => item.score > 0)
+      .filter(item => item.score >= 95)
       .sort((a, b) => b.score - a.score || a.name.length - b.name.length)
   }
 
   return results.slice(0, limit)
 }
 
-export async function listWikiChannel(channel, page = 1) {
+async function catalogItems(channelId = 0) {
+  const channels = channelId ? WIKI_CHANNELS.filter(channel => channel.id === channelId) : WIKI_CHANNELS
+  const lists = await Promise.all(channels.map(channel => getChannelItems(channel.id).catch(() => [])))
+  return lists.flat()
+}
+
+export const CATALOG_PAGE_SIZE = 24
+
+const FILTER_ALIASES = [
+  ['五星', ['5星']],
+  ['四星', ['4星']],
+  ['三星', ['3星']],
+  ['二星', ['2星']],
+  ['一星', ['1星']],
+  ['单手剑', ['单手']],
+  ['双手剑', ['双手', '大剑', '重剑']],
+  ['长柄武器', ['长柄', '长枪']],
+  ['蒙德城', ['蒙德']],
+  ['璃月港', ['璃月']],
+  ['稻妻城', ['稻妻']],
+  ['须弥城', ['须弥']],
+  ['枫丹廷', ['枫丹']],
+  ['至冬', ['至冬国']],
+  ['始基力 荒', ['始基力荒']],
+  ['始基力 芒', ['始基力芒']],
+]
+
+function parseJsonText(value, fallback) {
+  if (Array.isArray(value) || (value && typeof value === 'object')) return value
+  if (!value) return fallback
+  try {
+    return JSON.parse(value)
+  } catch {
+    return fallback
+  }
+}
+
+function parseChannelFilters(value) {
+  const ext = parseJsonText(value, [])
+  const raw = (Array.isArray(ext) ? ext : []).find(item => item?.attribute_key === 'filter')?.value
+  const groups = parseJsonText(raw, [])
+  return (Array.isArray(groups) ? groups : [])
+    .map(group => ({
+      label: String(group?.label || '').trim(),
+      options: (group?.children || []).map(child => String(child?.label || '').trim()).filter(Boolean),
+    }))
+    .filter(group => group.label && group.options.length)
+}
+
+function parseItemFilters(value) {
+  const ext = parseJsonText(value, {})
+  const bag = Object.values(ext || {}).map(item => item?.filter?.text).find(Boolean)
+  const tags = parseJsonText(bag, [])
+  const filters = {}
+  for (const tag of Array.isArray(tags) ? tags : []) {
+    const text = String(tag || '')
+    const slash = text.indexOf('/')
+    if (slash <= 0) continue
+    const key = text.slice(0, slash).trim()
+    const option = text.slice(slash + 1).trim()
+    if (!key || !option) continue
+    if (!filters[key]) filters[key] = []
+    if (!filters[key].includes(option)) filters[key].push(option)
+  }
+  return filters
+}
+
+function filterWords(option) {
+  const text = String(option || '').trim()
+  const words = new Set([text, text.replace(/\s+/g, '')])
+  for (const [name, aliases] of FILTER_ALIASES) {
+    if (text === name || aliases.includes(text)) {
+      words.add(name)
+      aliases.forEach(alias => words.add(alias))
+    }
+  }
+  return [...words].filter(Boolean).sort((a, b) => b.length - a.length)
+}
+
+function matchFilter(filters, token) {
+  const query = String(token || '').replace(/\s+/g, '')
+  if (!query) return false
+  for (const values of Object.values(filters || {})) {
+    for (const value of values) {
+      if (filterWords(value).some(word => word.replace(/\s+/g, '') === query)) return true
+    }
+  }
+  return false
+}
+
+export async function listWikiChannel(channel, page = 1, filters = []) {
   const items = await getChannelItems(channel.id)
-  const size = 24
-  const totalPage = Math.max(1, Math.ceil(items.length / size))
-  const current = Math.min(Math.max(1, page), totalPage)
+  const wanted = [...new Set((filters || []).map(item => String(item || '').trim()).filter(Boolean))]
+  const matched = wanted.length
+    ? items.filter(item => wanted.every(token => matchFilter(item.filters, token)))
+    : items
+  const size = CATALOG_PAGE_SIZE
+  const totalPage = Math.max(1, Math.ceil(matched.length / size))
+  const current = Math.max(1, page)
   const start = (current - 1) * size
   return {
     channel,
     page: current,
     totalPage,
-    total: items.length,
-    items: items.slice(start, start + size),
+    total: matched.length,
+    filters: wanted,
+    schema: items[0]?.filterSchema || [],
+    items: matched.slice(start, start + size),
   }
+}
+
+export async function getWikiCalendar(days = 7) {
+  const cached = cache.lists.get('calendar')
+  const fresh = !cached || Date.now() - cached.time >= CACHE_TTL
+  const data = fresh
+    ? await requestJson(`${LIST_BASE}/common/blackboard/${APP_SN}/v1/get_activity_calendar?app_sn=${APP_SN}`)
+    : cached.items
+  if (fresh) cache.lists.set('calendar', { time: Date.now(), items: data })
+
+  const span = Math.min(14, Math.max(1, Number(days) || 7))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const week = ['日', '一', '二', '三', '四', '五', '六']
+  const rows = []
+
+  for (let offset = 0; offset < span; offset += 1) {
+    const date = new Date(today.getTime() + offset * 86400000)
+    const month = date.getMonth() + 1
+    const day = date.getDate()
+    const weekday = date.getDay() || 7
+    const start = Math.floor(date.getTime() / 1000)
+    const end = start + 86400
+    const birthdays = []
+    const talent = new Map()
+    const weapon = new Map()
+
+    for (const item of data?.list || []) {
+      if (String(item.kind) === '4') {
+        const time = Number(item.start_time)
+        if (time >= start && time < end) {
+          const name = String(item.title || '').replace(/^今天是|今天的/, '').replace(/的生日.*$/, '').trim()
+          if (name) birthdays.push({ name, icon: item.img_url || '' })
+        }
+        continue
+      }
+      if (String(item.kind) !== '2' || weekday === 7) continue
+      if (!(item.drop_day || []).map(Number).includes(weekday)) continue
+      const bucket = String(item.break_type) === '1' ? weapon : talent
+      const material = item.contentInfos?.[0]
+      const book = String(material?.title || '').split(/的|之/)[0]
+      const key = book || material?.title
+      if (!key || bucket.has(key)) continue
+      bucket.set(key, { name: material.title, icon: material.icon || '' })
+    }
+
+    rows.push({
+      label: offset === 0 ? '今天' : offset === 1 ? '明天' : `${month}月${day}日`,
+      date: `${month}月${day}日`,
+      week: '周' + week[date.getDay()],
+      birthdays,
+      talent: weekday === 7 ? [] : [...talent.values()],
+      weapon: weekday === 7 ? [] : [...weapon.values()],
+      open: weekday === 7,
+    })
+  }
+
+  return { rows }
+}
+
+export function parseCatalogQuery(input = '') {
+  const text = String(input).replace(/^#?g?图鉴(?:目录|列表|分类)\s*/, '').trim()
+  const tokens = text.split(/\s+/).filter(Boolean)
+  let channel = null
+  let page = 1
+  const filters = []
+  for (const token of tokens) {
+    if (/^\d+$/.test(token)) {
+      page = Math.max(1, parseInt(token, 10))
+      continue
+    }
+    const matched = findWikiChannel(token)
+    if (matched && !channel) {
+      channel = matched
+      continue
+    }
+    filters.push(token)
+  }
+  return { channel, page, filters }
 }
 
 export function parseWikiQuery(input = '') {
@@ -400,12 +616,13 @@ function filtersOf(page) {
   })
 }
 
-function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = []) {
+function pushSection(sections, title, lines, collapse = false, groups = [], total = [], cards = [], images = [], videos = []) {
   const content = (Array.isArray(lines) ? lines : [lines]).map(line => String(line || '').trim()).filter(Boolean)
   const materialGroups = (groups || []).filter(group => group.materials?.length)
-  const cardItems = (cards || []).filter(card => card?.name || card?.text)
+  const cardItems = (cards || []).filter(card => card?.name || card?.text || card?.icon)
   const pictures = (images || []).filter(item => item?.src)
-  if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length) return
+  const clips = (videos || []).filter(item => item?.src)
+  if (!content.length && !materialGroups.length && !cardItems.length && !pictures.length && !clips.length) return
   const limit = collapse ? 1800 : 4000
   sections.push({
     title: title || '详情',
@@ -414,6 +631,7 @@ function pushSection(sections, title, lines, collapse = false, groups = [], tota
     total: total || [],
     cards: cardItems,
     images: pictures,
+    videos: clips,
   })
 }
 
@@ -430,6 +648,21 @@ function attrPairs(attrs, limit = 8) {
     key: stripHtml(attr.key).replace(/[：:\s]+$/g, ''),
     value: valuesOf(attr).join('、'),
   })).filter(attr => attr.key && attr.value).slice(0, limit)
+}
+
+function effectCards(attrs) {
+  return attrPairs(attrs, 8)
+    .filter(attr => /件套|效果|精炼|特效/.test(attr.key))
+    .map(attr => ({ name: attr.key, text: attr.value }))
+}
+
+function weaponEffect(html) {
+  const text = stripHtml(html)
+  const matched = text.match(/精炼(?:\([^)]*\))?阶\s*([\s\S]*?)(?:\n\n|$)/)
+  if (!matched) return []
+  const body = matched[1].replace(/^[·\s]+/, '').trim()
+  const name = body.split(/[·：:]/)[0].trim()
+  return body ? [{ name: name && name.length <= 16 ? name : '武器效果', text: body.replace(new RegExp(`^${name}\\s*[·：:]?\\s*`), '') || body }] : []
 }
 
 function parseGrowth(data) {
@@ -466,12 +699,14 @@ function parseTalent(data) {
   let materials = []
   for (const item of data?.list || []) {
     const title = [item.tab_name, item.title].filter(Boolean).join(' · ')
-    const desc = stripHtml(item.desc)
-    if (title || desc) {
+    const desc = proseOf(item.desc)
+    const scaling = scalingOf(item.attr)
+    if (title || desc || scaling) {
       talents.push({
         name: title,
         text: desc,
         icon: item.icon || '',
+        scaling,
       })
     }
 
@@ -487,6 +722,19 @@ function parseTalent(data) {
   return { talents, materials }
 }
 
+function scalingOf(table) {
+  const header = table?.header || []
+  const rows = table?.row || []
+  if (header.length < 2 || !rows.length) return null
+  const levels = header.slice(1).map(cellText)
+  const body = rows.map(cells => {
+    const name = cellText(cells?.[0])
+    if (!name || /升级材料/.test(name)) return null
+    return { name, values: cells.slice(1).map(cellText) }
+  }).filter(row => row && row.values.some(Boolean))
+  return body.length ? { levels, rows: body } : null
+}
+
 function cellText(cell) {
   if (cell == null) return ''
   if (typeof cell === 'string' || typeof cell === 'number') return stripHtml(cell)
@@ -498,6 +746,25 @@ function imagesFromHtml(value) {
   const tagged = [...html.matchAll(/data-image-url="([^"]+)"/g)].map(match => match[1])
   const images = tagged.length ? tagged : [...html.matchAll(/<img[^>]+src="([^"]+)"/g)].map(match => match[1])
   return [...new Set(images.filter(Boolean))]
+}
+
+function videoFromHtml(value) {
+  const html = String(value ?? '')
+  const src = html.match(/data-video-url="([^"]+)"/)?.[1] || ''
+  if (!src) return null
+  const name = stripHtml(html).split('\n').find(Boolean) || ''
+  return { name, src }
+}
+
+function proseOf(value) {
+  const quotes = []
+  const body = String(value ?? '').replace(/<p>(?:\s|&nbsp;)*([「“][\s\S]*?[」”])(?:\s|&nbsp;)*<\/p>/gi, (_, quote) => {
+    const text = stripHtml(quote).trim()
+    if (text) quotes.push(text)
+    return ''
+  })
+  const text = stripHtml(body)
+  return quotes.length ? `${text}\n\n${quotes.join('\n')}`.trim() : text
 }
 
 function splitConstellations(html) {
@@ -519,10 +786,41 @@ function splitConstellations(html) {
   }).filter(item => item.name)
 }
 
+function placeholderTitle(value) {
+  const text = stripHtml(value)
+  return text && !/默认标题|暂无/.test(text) ? text : ''
+}
+
+function cleanLabel(value) {
+  return stripHtml(value).replace(/默认标题/g, '').replace(/^[：:|｜\s]+|[：:|｜\s]+$/g, '').trim()
+}
+
+function voiceActors(html) {
+  const labels = { 中: '中', 汉: '中', 日: '日', 英: '英', 韩: '韩' }
+  const found = []
+  const seen = new Set()
+  const add = (label, name) => {
+    const actor = String(name || '').trim()
+    if (!actor || seen.has(label)) return
+    seen.add(label)
+    found.push(`${label}：${actor}`)
+  }
+  const source = String(html ?? '')
+  for (const line of stripHtml(source).split('\n')) {
+    const matched = line.trim().match(/^([中汉日英韩])(?:[文语])?(?:语)?\s*(?:CV|cv|配音)?\s*[：:]\s*(.+)$/)
+    if (matched) add(labels[matched[1]], matched[2])
+  }
+  if (found.length >= 2) return found
+  for (const match of source.matchAll(/([中汉日英韩])(?:[文语])?(?:语)?\s*(?:CV|cv|配音)?\s*[：:]\s*([^<\n]+)/g)) {
+    add(labels[match[1]], stripHtml(match[2]))
+  }
+  return found
+}
+
 function parseTables(data) {
   const lines = []
   const cards = []
-  for (const table of (data?.tables || []).slice(0, 2)) {
+  for (const table of data?.tables || []) {
     const title = stripHtml(table?.tab_name || table?.title || table?.name || '')
     const rows = table?.row || table?.rows || table?.list || table?.data || []
     const visual = rows.some(row => {
@@ -530,6 +828,14 @@ function parseTables(data) {
       return entriesFromHtml(cells[0]).length || imagesFromHtml(cells[0]).length
     })
     if (!visual) {
+      const pictures = rows.flatMap(row => {
+        const cells = Array.isArray(row) ? row : []
+        return cells.flatMap(cell => imagesFromHtml(cell).map(src => ({ src, text: cellText(cell) })))
+      }).filter(item => item.src && !/成长数据/.test(item.text))
+      if (pictures.length) {
+        pictures.slice(0, 6).forEach(item => cards.push({ group: placeholderTitle(title), name: cleanLabel(item.text) || '推荐', icon: item.src }))
+        continue
+      }
       if (title && title !== '默认标题') lines.push(title)
       for (const row of rows.slice(0, 6)) {
         const cells = Array.isArray(row) ? row : (row?.cells || row?.value || row?.attr || row?.columns)
@@ -541,7 +847,7 @@ function parseTables(data) {
       continue
     }
 
-    const limit = /推荐/.test(title) ? 6 : 8
+    const limit = /推荐/.test(title) ? 8 : 8
     let shown = 0
     for (const row of rows) {
       if (shown >= limit) break
@@ -557,32 +863,25 @@ function parseTables(data) {
       }
       const entries = entriesFromHtml(cells[0])
       const images = imagesFromHtml(cells[0])
-      if (entries.length > 1) {
-        const separator = stripHtml(cells[0]).includes('/') ? ' / ' : ' + '
-        cards.push({
-          group: title,
-          name: entries.map(entry => entry.name).join(separator),
-          icons: entries.map(entry => entry.icon).filter(Boolean),
+      const group = placeholderTitle(title)
+      if (entries.length) {
+        entries.forEach(entry => cards.push({
+          group,
+          name: entry.name,
+          icon: entry.icon,
           text: reason,
-        })
-      } else if (entries.length) {
-        cards.push({
-          group: title,
-          name: entries[0].name,
-          icon: entries[0].icon,
-          text: reason,
-        })
+        }))
       } else if (images.length === 1 && !/成长数据/.test(label)) {
         const text = cellText(cells[0])
         cards.push({
-          group: title,
-          name: text,
+          group,
+          name: cleanLabel(text) || text,
           icon: images[0],
           text: reason,
         })
       } else {
         const text = cells.map(cellText).filter(Boolean).join('：')
-        if (text && !/成长数据/.test(text)) cards.push({ group: title, name: text })
+        if (text && !/成长数据/.test(text)) cards.push({ group, name: cleanLabel(text) || text })
       }
     }
   }
@@ -619,8 +918,9 @@ function parseComponent(component, moduleName) {
     return lines.length ? { title: '基础资料', lines } : null
   }
   if (id === 'good_desc') {
-    const attrs = attrPairs(data?.attr, 6).map(attr => `${attr.key}：${attr.value}`)
-    return { title, lines: [stripHtml(data?.rich_text), ...attrs].filter(Boolean) }
+    const cards = [...effectCards(data?.attr), ...weaponEffect(data?.rich_text)]
+    const flavor = stripHtml(data?.rich_text).replace(/精炼(?:\([^)]*\))?阶\s*[\s\S]*?(?:\n\n|$)/, '').trim()
+    return { title: cards.length ? '装备描述' : title, lines: flavor ? [flavor] : [], cards }
   }
   if (id === 'equipment_growth_info') {
     const parsed = parseGrowth(data)
@@ -638,27 +938,46 @@ function parseComponent(component, moduleName) {
   if (id === 'multi_table' || id === 'recommend') {
     if (/演示/.test(title)) return null
     const parsed = parseTables(data)
-    return { title, lines: parsed.lines, cards: parsed.cards }
+    return { title, lines: parsed.lines, cards: parsed.cards, focus: /推荐/.test(title) ? 'recommend' : '' }
   }
   if (id === 'map_desc') {
     const images = (data.list || [])
       .filter(item => item?.image && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(item.image))
-      .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image }))
-    return images.length ? { title, lines: [], images } : null
+      .map(item => ({ name: stripHtml(item.tab_name || item.name || ''), src: item.image, motion: /\.gif(\?|$)/i.test(item.image) }))
+    if (!images.length) return null
+    const stills = images.filter(item => !item.motion)
+    const motions = images.filter(item => item.motion)
+    if (stills.length && !motions.length) {
+      return { title, lines: [], images: stills, focus: 'portrait' }
+    }
+    return { title, lines: [], images: motions.length ? motions : images, portraits: stills.length && motions.length ? stills : [] }
   }
   if (id === 'artifact_list_v2') {
     const card = parseArtifact(data, moduleName)
     return card ? { title: '圣遗物件', lines: [], cards: [card] } : null
   }
   if (id === 'rich_base_info') {
-    return { title, lines: attrPairs(data?.list || data?.attr, 8).map(attr => `${attr.key}：${attr.value}`) }
+    const cards = effectCards(data?.list || data?.attr)
+    return { title: cards.length ? '套装效果' : title, lines: [], cards }
   }
   if (id === 'collapse_panel' || id === 'rich_text') {
+    const voices = /角色CV|配音/.test(title) ? voiceActors(data?.rich_text) : []
+    if (voices.length) return { title: '配音', lines: voices, cards: voices.map(line => ({ name: line })), focus: 'voice' }
+    const video = videoFromHtml(data?.rich_text)
+    if (video) return { title: title || '角色视频', lines: [], videos: [video] }
     return { title, lines: [stripHtml(data?.rich_text)], collapse: true }
   }
-  if (['role_voice', 'strategy', 'business_card', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
+  if (id === 'business_card') {
+    const images = [data.long_img, data.card_img]
+      .filter(src => src && /\.(png|jpe?g|gif|webp)(\?|$)/i.test(src))
+      .map((src, index) => ({ name: index ? '名片' : '获取界面', src, motion: false }))
+    return images.length ? { title: '名片', lines: [], images, focus: 'portrait' } : null
+  }
+  if (['role_voice', 'strategy', 'timeline_base_info', 'interactive_dialogue', 'card_group_info'].includes(id)) {
     return null
   }
+  const video = videoFromHtml(data?.rich_text)
+  if (video) return { title: title || '角色视频', lines: [], videos: [video] }
   if (data?.rich_text) return { title, lines: [stripHtml(data.rich_text)], collapse: true }
   return null
 }
@@ -759,21 +1078,23 @@ function headerFrom(page) {
   }
 }
 
-const PRIORITY = ['装备描述', '基础信息', '物品描述', '基础属性', '圣遗物件', '成长数值', '角色突破', '推荐装备', '天赋', '命之座', '推荐角色', '特殊料理']
-const STORY_TITLE = /故事|神之眼|更多描述|角色详细|角色CV|配音/
-const PROFILE_TITLE = /基础资料|基础信息|基础属性|物品描述|装备描述/
+const BRIEF = /基础资料|基础属性|套装效果|装备描述|推荐装备|推荐角色|搭配推荐|特殊料理|突破|成长数值|升级材料/
+const PROFILE_TITLE = /基础资料|基础信息|基础属性|套装效果|装备描述/
 const ASCENSION_TITLE = /突破|成长数值|升级材料/
 
 function focusOf(title = '', images = []) {
   if (/天赋/.test(title)) return 'talent'
+  if (/角色CV|配音/.test(title) && !/展示|语音/.test(title)) return 'voice'
   if (/命之座|命座/.test(title)) return 'constellation'
   if (ASCENSION_TITLE.test(title)) return 'ascension'
-  if (STORY_TITLE.test(title)) return 'story'
+  if (/故事|神之眼|更多描述|角色详细/.test(title)) return 'story'
+  if (/推荐/.test(title)) return 'recommend'
   if (PROFILE_TITLE.test(title)) return 'profile'
   if (/展示/.test(title) && images.length) {
-    const still = images.every(item => /\.(png|jpe?g|webp)(\?|$)/i.test(item.src) && !/待机|攻击|战技|爆发|重击/.test(item.name))
+    const still = images.every(item => !item.motion)
     return still ? 'portrait' : 'showcase'
   }
+  if (/视频|PV|演示|预告/.test(title)) return 'video'
   return ''
 }
 
@@ -788,42 +1109,76 @@ export function formatWikiEntry(page) {
     if (module.is_hidden) continue
     for (const component of module.components || []) {
       const parsed = parseComponent(component, module.name)
-      if (!parsed?.lines?.length && !parsed?.groups?.length && !parsed?.cards?.length && !parsed?.images?.length) continue
-      pending.push({ ...parsed, focus: focusOf(parsed.title, parsed.images || []) })
+      if (!parsed) continue
+      const hasContent = parsed.lines?.some(Boolean) || parsed.groups?.length || parsed.cards?.length || parsed.images?.length || parsed.videos?.length || parsed.portraits?.length
+      if (!hasContent) continue
+      const focus = parsed.focus || (parsed.videos?.length ? 'video' : focusOf(parsed.title, parsed.images || []))
+      if (focus === 'portrait' && parsed.title !== '名片') parsed.images = (parsed.images || []).map(item => ({ ...item, name: '' }))
+      pending.push({ ...parsed, focus })
     }
   }
 
-  pending.sort((a, b) => {
-    const ai = PRIORITY.indexOf(a.title)
-    const bi = PRIORITY.indexOf(b.title)
-    return (ai < 0 ? 99 : ai) - (bi < 0 ? 99 : bi)
-  })
+  pending.sort((a, b) => (BRIEF.test(b.title) ? 1 : 0) - (BRIEF.test(a.title) ? 1 : 0))
   const ordered = [
     ...pending.filter(item => item.focus !== 'story'),
     ...pending.filter(item => item.focus === 'story'),
   ]
 
   for (const parsed of ordered) {
-    const previous = sections.find(section => section.title === parsed.title && section.focus === parsed.focus)
+    const previous = sections.find(section => {
+      if (section.title !== parsed.title || section.focus !== parsed.focus) return false
+      const sectionStill = !(section.images || []).some(item => item.motion)
+      const parsedStill = !(parsed.images || []).some(item => item.motion)
+      return sectionStill === parsedStill
+    })
     if (previous) {
       previous.cards = [...(previous.cards || []), ...(parsed.cards || [])]
       previous.groups = [...(previous.groups || []), ...(parsed.groups || [])]
+      previous.total = [...(previous.total || []), ...(parsed.total || [])]
       previous.images = [...(previous.images || []), ...(parsed.images || [])]
+      previous.portraits = [...(previous.portraits || []), ...(parsed.portraits || [])]
+      previous.videos = [...(previous.videos || []), ...(parsed.videos || [])]
       if (parsed.lines?.length) previous.text = [previous.text, ...parsed.lines].filter(Boolean).join('\n')
       continue
     }
-    const key = parsed.focus + parsed.title + parsed.lines.join('\n')
+    const key = [
+      parsed.focus,
+      parsed.title,
+      (parsed.images || []).some(item => item.motion) ? 'motion' : 'still',
+      parsed.lines.join('\n'),
+    ].join('\0')
     if (seen.has(key)) continue
     seen.add(key)
-    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images)
+    pushSection(sections, parsed.title, parsed.lines, parsed.collapse, parsed.groups, parsed.total, parsed.cards, parsed.images, parsed.videos)
     const current = sections[sections.length - 1]
-    if (current) current.focus = parsed.focus
+    if (current) {
+      current.focus = parsed.focus
+      current.portraits = parsed.portraits || []
+    }
   }
 
+  const portraits = [
+    ...sections.flatMap(section => section.focus === 'portrait' ? section.images : []),
+    ...sections.flatMap(section => section.portraits || []),
+  ]
+  const motions = sections.flatMap(section => section.focus === 'showcase' ? section.images.filter(item => item.motion) : [])
+  const videos = sections.flatMap(section => section.videos || [])
   const character = isCharacterPage(page)
-  const overview = character
-    ? sections.filter(section => /推荐装备|特殊料理|圣遗物|基础资料/.test(section.title)).slice(0, 4)
-    : sections.filter(section => !STORY_TITLE.test(section.title)).slice(0, 5)
+  const weapon = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'equipment_base_info'))
+  const artifact = (page.modules || []).some(module => (module.components || []).some(component => component.component_id === 'artifact_list_v2'))
+  const voices = sections.filter(section => section.focus === 'voice')
+  const wanted = character
+    ? ['profile', 'talent', 'ascension', 'recommend']
+    : (weapon || artifact ? ['profile', 'ascension', 'recommend'] : ['profile', 'ascension'])
+  const picked = []
+  for (const id of wanted) {
+    for (const found of sections.filter(section => section.focus === id)) picked.push(found)
+  }
+  if (character) picked.push(...voices)
+  if (weapon && !picked.some(section => section.focus === 'recommend')) {
+    picked.push({ title: '推荐角色', text: '', lines: [], cards: [], groups: [], total: [], images: [], videos: [], focus: 'recommend', empty: '暂无推荐角色' })
+  }
+  const overview = picked.length ? picked : sections.filter(section => BRIEF.test(section.title) && section.focus !== 'video').slice(0, 3)
 
   return {
     id: String(page.id),
@@ -831,17 +1186,15 @@ export function formatWikiEntry(page) {
     icon: header.icon,
     tags: header.tags,
     attrs: header.attrs,
-    theme: header.theme,
+    theme: { ...header.theme, portrait: portraits[0]?.src || '' },
     sections: overview,
-    parts: character ? {
-      talent: sections.filter(section => section.focus === 'talent'),
-      constellation: sections.filter(section => section.focus === 'constellation'),
-      ascension: sections.filter(section => section.focus === 'ascension'),
-      story: sections.filter(section => section.focus === 'story'),
-      profile: sections.filter(section => section.focus === 'profile'),
-      portrait: sections.filter(section => section.focus === 'portrait'),
-      showcase: sections.filter(section => section.focus === 'showcase'),
-    } : {},
+    all: sections.filter(section => section.focus !== 'video' && section.focus !== 'portrait' && section.focus !== 'showcase'),
+    portraits,
+    motions,
+    videos,
+    parts: Object.fromEntries(['talent', 'constellation', 'ascension', 'story', 'profile', 'recommend', 'voice', 'portrait', 'showcase']
+      .map(id => [id, sections.filter(section => section.focus === id)])
+      .filter(([, list]) => list.length)),
     url: `https://baike.mihoyo.com/ys/obc/content/${page.id}/detail?bbs_presentation_style=no_header`,
   }
 }
