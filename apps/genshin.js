@@ -459,7 +459,19 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       for (const frame of page.frames()) await cleanFrame(frame)
       await new Promise(resolve => setTimeout(resolve, 500))
       for (const frame of page.frames()) await cleanFrame(frame)
-      const buffer = await page.screenshot({ type: 'png' })
+      await page.keyboard.press('Escape').catch(() => {})
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const canvases = await page.$$('canvas')
+      let mapCanvas = null
+      let largestArea = 0
+      for (const canvas of canvases) {
+        const box = await canvas.boundingBox().catch(() => null)
+        const area = box ? box.width * box.height : 0
+        if (area > largestArea) { largestArea = area; mapCanvas = canvas }
+      }
+      const buffer = mapCanvas && largestArea > 200000
+        ? await mapCanvas.screenshot({ type: 'png' })
+        : await page.screenshot({ type: 'png' })
       return segment.image(buffer)
     } finally {
       await page.close().catch(() => {})
