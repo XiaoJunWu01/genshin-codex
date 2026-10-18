@@ -6,7 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
 import { aliasKinds, aliasNames, upcomingName } from '../model/alias.js'
-import { recommendedRoutes, mapRouteHtml } from '../model/map.js'
+import { postImageUrls, recommendedRoutes, routePostUrl } from '../model/map.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -510,28 +510,28 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         await e.reply(`没有找到「${keyword}」的推荐路线。`)
         return true
       }
-      const images = []
-      for (const route of routes) {
-        const image = await this.captureRoute(route) || await this.render(mapRouteHtml(route))
-        if (image) images.push({ name: route.name, image })
-      }
-      if (!images.length) {
-        await e.reply('路线图截图失败，请稍后重试。')
+      const messages = routes.flatMap(post => {
+        const title = `【${post.title}】\n${routePostUrl(post)}`
+        const images = postImageUrls(post).map(src => segment.image(src))
+        return [title, ...images]
+      })
+      if (!messages.length) {
+        await e.reply('找到了帖子，但没有可发送的路线图片。')
         return true
       }
       if (!e.group?.makeForwardMsg) {
-        await e.reply(images.flatMap(item => [item.name, item.image]))
+        await e.reply(messages)
         return true
       }
-      const forward = await e.group.makeForwardMsg(images.map(item => ({
-        message: [item.name, item.image],
-        nickname: '原神采集路线',
+      const forward = await e.group.makeForwardMsg(routes.map(post => ({
+        message: [`【${post.title}】\n${routePostUrl(post)}`, ...postImageUrls(post).map(src => segment.image(src))],
+        nickname: '米游社路线博主',
         user_id: 10000,
       })))
       await e.reply(forward)
     } catch (err) {
       logger.error('[观测枢路线]', err)
-      await e.reply('路线获取失败：米游社互动地图暂时无法访问，请稍后重试。')
+      await e.reply('路线获取失败：米游社博主帖子暂时无法访问，请稍后重试。')
     }
     return true
   }
