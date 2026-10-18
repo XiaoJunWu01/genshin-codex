@@ -6,6 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
 import { aliasKinds, aliasNames, upcomingName } from '../model/alias.js'
+import { recommendedRoutes, mapRouteHtml } from '../model/map.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -80,6 +81,7 @@ export default class WikiPlugin extends plugin {
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
+        { reg: `^${lead}(?:路线|采集路线|地图路线)(?:\\s+\\S.*)?$`, fnc: 'routeMap', priority: 65 },
         { reg: `^${lead}(?:影音|影音回廊|pv|PV|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog', priority: 0 },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
@@ -432,6 +434,44 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
       extraCss: entryCss,
       theme: themeOf(entry),
     }))
+  }
+
+  async routeMap(e) {
+    const keyword = String(e.msg || '').replace(/^#?g?\\s*/, '').replace(/^(?:路线|采集路线|地图路线)\\s*/, '').trim()
+    if (!keyword) {
+      await e.reply('请发送：#路线 材料名，例如：#路线 霓裳花')
+      return true
+    }
+    try {
+      const routes = await recommendedRoutes(keyword)
+      if (!routes.length) {
+        await e.reply(`没有找到「${keyword}」的推荐路线。`)
+        return true
+      }
+      const images = []
+      for (const route of routes) {
+        const image = await this.render(mapRouteHtml(route))
+        if (image) images.push({ name: route.name, image })
+      }
+      if (!images.length) {
+        await e.reply('路线图截图失败，请稍后重试。')
+        return true
+      }
+      if (!e.group?.makeForwardMsg) {
+        await e.reply(images.flatMap(item => [item.name, item.image]))
+        return true
+      }
+      const forward = await e.group.makeForwardMsg(images.map(item => ({
+        message: [item.name, item.image],
+        nickname: '原神采集路线',
+        user_id: 10000,
+      })))
+      await e.reply(forward)
+    } catch (err) {
+      logger.error('[观测枢路线]', err)
+      await e.reply('路线获取失败：米游社互动地图暂时无法访问，请稍后重试。')
+    }
+    return true
   }
 
   async gallery(e) {
