@@ -452,6 +452,7 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         for (const node of [...document.querySelectorAll('body *')]) {
           const style = getComputedStyle(node), rect = node.getBoundingClientRect(), text = (node.innerText || '').trim()
           if ((style.position === 'fixed' || style.position === 'absolute') && rect.width > 220 && rect.height > 100 && words.test(text)) hide(node)
+          if (style.position === 'fixed' && rect.width > innerWidth * .18 && rect.height > innerHeight * .12 && node.querySelectorAll('canvas').length === 0) hide(node)
           if ((style.position === 'fixed' || style.position === 'absolute') && Number(style.zIndex || 0) > 1000 && rect.width > innerWidth * .25 && rect.height > innerHeight * .2) hide(node)
         }
         document.querySelectorAll('button,[role="button"]').forEach(button => { if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click() })
