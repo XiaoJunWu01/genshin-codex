@@ -448,12 +448,32 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
         const selectors = [
           '[class*="login"]', '[class*="Login"]', '[class*="modal"]', '[class*="Modal"]',
           '[class*="dialog"]', '[class*="Dialog"]', '[class*="popup"]', '[class*="Popup"]',
-          '[role="dialog"]', '.mhy-account-flow', '.mhy-login-dialog',
+          '[class*="mask"]', '[class*="Mask"]', '[class*="overlay"]', '[class*="Overlay"]',
+          '[role="dialog"]', '[aria-modal="true"]', '.mhy-account-flow', '.mhy-login-dialog',
         ]
         for (const selector of selectors) {
           document.querySelectorAll(selector).forEach(node => {
-            node.style.display = 'none'
-            node.remove()
+            if (node !== document.body && node !== document.documentElement) node.remove()
+          })
+        }
+        const loginWords = /登录|手机号|验证码|账号密码|同意并登录|登录后查看|立即登录/
+        for (const node of [...document.querySelectorAll('body *')]) {
+          const text = (node.innerText || '').trim()
+          const style = getComputedStyle(node)
+          if (text && text.length < 180 && loginWords.test(text) && style.position === 'fixed') {
+            let target = node
+            for (let i = 0; i < 4 && target.parentElement; i++) {
+              const parent = target.parentElement
+              const parentStyle = getComputedStyle(parent)
+              if (parentStyle.position === 'fixed' || Number(parentStyle.zIndex || 0) > 10) target = parent
+              else break
+            }
+            target.remove()
+          }
+        }
+        for (const root of [document, ...[...document.querySelectorAll('*')].filter(node => node.shadowRoot)]) {
+          root.querySelectorAll?.('button,[role="button"]').forEach(button => {
+            if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click()
           })
         }
         document.querySelectorAll('iframe').forEach(frame => { frame.style.visibility = 'hidden' })
