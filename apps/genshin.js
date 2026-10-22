@@ -6,7 +6,7 @@ import path from 'path'
 import fs from 'fs'
 import { getWikiConfig, resolvePluginPath } from '../config/config.js'
 import { aliasKinds, aliasNames, upcomingName } from '../model/alias.js'
-import { postImageUrls, recommendedRoutes, routePostUrl } from '../model/map.js'
+import { enableRuleFallthrough } from './lib/fallthrough.js'
 import { mediaClip, mediaGroups, mediaVideos } from '../model/games.js'
 import {
   WIKI_CHANNELS,
@@ -81,7 +81,6 @@ export default class WikiPlugin extends plugin {
       rule: [
         { reg: `^${lead}(?:图鉴帮助|观测枢帮助|wiki帮助)$`, fnc: 'showHelp' },
         { reg: `^${lead}(?:图鉴|观测枢)更新$`, fnc: 'updatePlugin', priority: 40 },
-        { reg: `^${lead}(?:路线|采集路线|地图路线)(?:\\s+\\S.*)?$`, fnc: 'routeMap', priority: 65 },
         { reg: `^${lead}(?:影音|影音回廊|pv|PV|角色视频|过场动画|其他视频)(?:\\s*\\S.*)?$`, fnc: 'gallery' },
         { reg: `^${lead}图鉴(目录|列表|分类)(?:\\s+.*)?$`, fnc: 'showCatalog', priority: 0 },
         { reg: `^${lead}图鉴(日历|今天)(?:\\s+\\d+)?$`, fnc: 'showCalendar' },
@@ -95,6 +94,7 @@ export default class WikiPlugin extends plugin {
         { reg: '^#\\s*(\\d+)$', fnc: 'queryIndex', priority: 1 },
       ],
     })
+    enableRuleFallthrough(this)
   }
 
   async render(html) {
@@ -436,106 +436,6 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     }))
   }
 
-  async captureRoute(route) {
-    const browser = await puppeteer.browserInit?.()
-    if (!browser?.newPage) return null
-    const page = await browser.newPage()
-    try {
-      await page.setViewport({ width: 1440, height: 900, deviceScaleFactor: 1 })
-      await page.goto(route.url, { waitUntil: 'domcontentloaded', timeout: 120000 })
-      await new Promise(resolve => setTimeout(resolve, 9000))
-      const cleanFrame = async frame => frame.evaluate(() => {
-        const selectors = ['[class*="login"]','[class*="Login"]','[class*="modal"]','[class*="Modal"]','[class*="dialog"]','[class*="Dialog"]','[class*="popup"]','[class*="Popup"]','[class*="mask"]','[class*="Mask"]','[role="dialog"]','[aria-modal="true"]','.mhy-account-flow','.mhy-login-dialog']
-        const hide = node => { if (node !== document.body && node !== document.documentElement) { node.style.setProperty('display','none','important'); node.remove() } }
-        selectors.forEach(selector => document.querySelectorAll(selector).forEach(hide))
-        const words = /登录|手机号|验证码|账号密码|同意并登录|登录后查看|立即登录|分享路线/
-        for (const node of [...document.querySelectorAll('body *')]) {
-          const style = getComputedStyle(node), rect = node.getBoundingClientRect(), text = (node.innerText || '').trim()
-          if ((style.position === 'fixed' || style.position === 'absolute') && rect.width > 220 && rect.height > 100 && words.test(text)) hide(node)
-          if (style.position === 'fixed' && rect.width > innerWidth * .18 && rect.height > innerHeight * .12 && node.querySelectorAll('canvas').length === 0) hide(node)
-          if ((style.position === 'fixed' || style.position === 'absolute') && Number(style.zIndex || 0) > 1000 && rect.width > innerWidth * .25 && rect.height > innerHeight * .2) hide(node)
-        }
-        document.querySelectorAll('button,[role="button"]').forEach(button => { if (/关闭|取消|跳过|close/i.test(button.innerText || button.getAttribute('aria-label') || '')) button.click() })
-        for (const title of [...document.querySelectorAll('body *')].filter(node => /^更新日志$/.test((node.innerText || '').trim()))) {
-          let panel = title
-          for (let i = 0; i < 6 && panel.parentElement; i++) {
-            const rect = panel.getBoundingClientRect()
-            if (rect.width > 240 && rect.width < innerWidth * .8 && rect.height > 180) break
-            panel = panel.parentElement
-          }
-          const close = [...panel.querySelectorAll('button,[role="button"],[aria-label]')].find(node => /关闭|取消|跳过|close|×/i.test(node.innerText || node.getAttribute('aria-label') || ''))
-          if (close) close.click()
-          else panel.remove()
-        }
-      }).catch(() => {})
-      for (const frame of page.frames()) await cleanFrame(frame)
-      await new Promise(resolve => setTimeout(resolve, 500))
-      for (const frame of page.frames()) await cleanFrame(frame)
-      await page.keyboard.press('Escape').catch(() => {})
-       // The map draws the update-log dialog in canvas; DOM selectors cannot close it.
-       const viewport = page.viewport()
-       if (viewport?.width && viewport.height) {
-         await page.mouse.click(Math.round(viewport.width * 0.665), Math.round(viewport.height * 0.18)).catch(() => {})
-         await new Promise(resolve => setTimeout(resolve, 800))
-       }
-      await new Promise(resolve => setTimeout(resolve, 300))
-      const canvases = await page.$$('canvas')
-      let mapCanvas = null
-      let largestArea = 0
-      for (const canvas of canvases) {
-        const box = await canvas.boundingBox().catch(() => null)
-        const area = box ? box.width * box.height : 0
-        if (area > largestArea) { largestArea = area; mapCanvas = canvas }
-      }
-      const buffer = mapCanvas && largestArea > 200000
-        ? await mapCanvas.screenshot({ type: 'png' })
-        : await page.screenshot({ type: 'png' })
-      return segment.image(buffer)
-    } finally {
-      await page.close().catch(() => {})
-    }
-  }
-
-  async routeMap(e) {
-    const keyword = String(e.msg || '')
-      .replace(/^\s*(?:#|g)?\s*(?:路线|采集路线|地图路线)\s*/i, '')
-      .trim()
-    if (!keyword) {
-      await e.reply('请发送：#路线 材料名，例如：#路线 霓裳花')
-      return true
-    }
-    try {
-      const routes = await recommendedRoutes(keyword)
-      if (!routes.length) {
-        await e.reply(`没有找到「${keyword}」的推荐路线。`)
-        return true
-      }
-      const messages = routes.flatMap(post => {
-        const title = `【${post.title}】\n${routePostUrl(post)}`
-        const images = postImageUrls(post).map(src => segment.image(src))
-        return [title, ...images]
-      })
-      if (!messages.length) {
-        await e.reply('找到了帖子，但没有可发送的路线图片。')
-        return true
-      }
-      if (!e.group?.makeForwardMsg) {
-        await e.reply(messages)
-        return true
-      }
-      const forward = await e.group.makeForwardMsg(routes.map(post => ({
-        message: [`【${post.title}】\n${routePostUrl(post)}`, ...postImageUrls(post).map(src => segment.image(src))],
-        nickname: '米游社路线博主',
-        user_id: 10000,
-      })))
-      await e.reply(forward)
-    } catch (err) {
-      logger.error('[观测枢路线]', err)
-      await e.reply('路线获取失败：米游社博主帖子暂时无法访问，请稍后重试。')
-    }
-    return true
-  }
-
   async gallery(e) {
     const raw = String(e.msg || '').replace(/^#?g?\s*/, '')
     const words = raw.split(/\s+/).filter(Boolean)
@@ -871,4 +771,3 @@ ${body}<div class="footer">${footer || ''}</div></div></div>
     return true
   }
 }
-

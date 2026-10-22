@@ -6,6 +6,7 @@ import {
 import { aliasKinds, aliasNames, upcomingName } from '../../model/alias.js'
 import { entryCss, resultCss, themeOf } from './theme.js'
 import { GAME_CSS, boardHtml, entryHtml, pageHtml, renderHtml, resultHtml } from './page.js'
+import { enableRuleFallthrough } from './fallthrough.js'
 
 const sessions = new Map()
 
@@ -31,6 +32,7 @@ export function gamePlugin(spec) {
       })
       this.spec = spec
       this.sessions = sessions
+      enableRuleFallthrough(this)
     }
 
     commandOf(text) {
